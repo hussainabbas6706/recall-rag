@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Never commit a personal Obsidian vault or local Qdrant data.
+vault/
+qdrant_storage/
