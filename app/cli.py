@@ -10,6 +10,11 @@ from app.ingest import find_markdown_files
 cli = typer.Typer(help="Local development commands for Recall.")
 
 
+@cli.callback()
+def main() -> None:
+    """Run a Recall development command."""
+
+
 @cli.command()
 def inspect(vault_path: Path | None = None) -> None:
     """List Markdown notes that Recall will ingest."""
