@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "recall_chunks"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = Field(default=768, ge=128, le=3072)
-    answer_model: str = "gemini-2.5-flash"
+    answer_model: str = "gemini-3.8-flash"
     top_k: int = Field(default=5, ge=1, le=20)
 
 
