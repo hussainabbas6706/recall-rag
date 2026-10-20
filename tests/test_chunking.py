@@ -234,5 +234,3 @@ def test_chunk_markdown_sequential_indices_across_splits() -> None:
 def test_chunk_markdown_empty_file() -> None:
     assert chunk_markdown(source_path="empty.md", raw_text="") == []
     assert chunk_markdown(source_path="blank.md", raw_text="   \n\n  ") == []
-
-

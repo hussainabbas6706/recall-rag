@@ -34,4 +34,3 @@ def parse_vault_chunks(vault_path: Path) -> list[Chunk]:
         all_chunks.extend(file_chunks)
 
     return all_chunks
-

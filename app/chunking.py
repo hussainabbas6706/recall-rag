@@ -199,5 +199,3 @@ def chunk_markdown(
             chunk_index += 1
 
     return chunks
-
-

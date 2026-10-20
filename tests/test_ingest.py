@@ -45,15 +45,30 @@ def test_parse_vault_chunks_fixture_vault() -> None:
     assert recall_chunks[1].chunk_index == 1
 
 
-def test_ingest_endpoint_chunks_fixture_vault() -> None:
-    client = TestClient(app)
-    response = client.post("/ingest", json={"vault_path": str(FIXTURE_VAULT)})
+from unittest.mock import patch
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "chunked"
-    assert data["files_found"] == 3
-    assert data["chunks_created"] == 4
+
+def test_ingest_endpoint_indexes_fixture_vault() -> None:
+    client = TestClient(app)
+    with patch("app.main.index_chunks", return_value=4) as mock_index:
+        response = client.post("/ingest", json={"vault_path": str(FIXTURE_VAULT)})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "indexed"
+        assert data["files_found"] == 3
+        assert data["chunks_created"] == 4
+        assert data["chunks_indexed"] == 4
+        mock_index.assert_called_once()
+
+
+def test_ingest_endpoint_indexing_failure_returns_500() -> None:
+    client = TestClient(app)
+    with patch("app.main.index_chunks", side_effect=RuntimeError("Connection refused")):
+        response = client.post("/ingest", json={"vault_path": str(FIXTURE_VAULT)})
+
+        assert response.status_code == 500
+        assert "Failed to index chunks into Qdrant" in response.json()["detail"]
 
 
 def test_ingest_endpoint_nonexistent_vault() -> None:
@@ -61,4 +76,3 @@ def test_ingest_endpoint_nonexistent_vault() -> None:
     response = client.post("/ingest", json={"vault_path": "non/existent/path/xyz"})
 
     assert response.status_code == 400
-
