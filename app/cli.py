@@ -6,7 +6,7 @@ import typer
 
 from app.config import get_settings
 from app.ingest import find_markdown_files, parse_vault_chunks
-from app.vectorstore import get_qdrant_client, index_chunks
+from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
 
 cli = typer.Typer(help="Local development commands for Recall.")
 
@@ -68,6 +68,40 @@ def stats() -> None:
     typer.echo(f"Points:     {info.points_count}")
     vectors_config = info.config.params.vectors
     typer.echo(f"Vectors:    {vectors_config.size}d ({vectors_config.distance})")
+
+
+@cli.command()
+def search(
+    query: str = typer.Argument(..., help="Search query string"),
+    top_k: int = typer.Option(
+        3, "--top-k", "-k", min=1, max=20, help="Number of results to return"
+    ),
+    threshold: float | None = typer.Option(
+        None, "--threshold", "-t", min=0.0, max=1.0, help="Minimum cosine score cutoff"
+    ),
+) -> None:
+    """Search indexed vault chunks by semantic similarity."""
+    settings = get_settings()
+    client = get_qdrant_client()
+    typer.echo(f"Searching '{settings.qdrant_collection}' for: \"{query}\"")
+    results = search_chunks(
+        client=client,
+        collection_name=settings.qdrant_collection,
+        query=query,
+        top_k=top_k,
+        score_threshold=threshold,
+    )
+
+    if not results:
+        typer.echo("No matching chunks found.")
+        return
+
+    typer.echo(f"Found {len(results)} matching chunk(s):\n")
+    for i, result in enumerate(results, 1):
+        crumbs = " > ".join(result.chunk.heading_path) if result.chunk.heading_path else "(root)"
+        snippet = result.chunk.content.replace("\n", " ").strip()
+        typer.echo(f"[{i}] Score: {result.score:.4f} | {result.chunk.source_path} > {crumbs}")
+        typer.echo(f'    "{snippet}"\n')
 
 
 if __name__ == "__main__":

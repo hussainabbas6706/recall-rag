@@ -136,3 +136,111 @@ def test_index_chunks_indexes_payload_and_vectors() -> None:
     assert reindexed_count == 2
     count_info = client.count(collection_name=collection_name)
     assert count_info.count == 2
+
+
+def test_search_chunks_empty_query_raises() -> None:
+    from app.vectorstore import search_chunks
+
+    client = QdrantClient(":memory:")
+    with pytest.raises(ValueError, match="Query string cannot be empty"):
+        search_chunks(client=client, collection_name="any", query="   ")
+
+
+def test_search_chunks_nonexistent_collection_returns_empty() -> None:
+    from unittest.mock import MagicMock
+
+    from app.vectorstore import search_chunks
+
+    client = QdrantClient(":memory:")
+    mock_embeddings = MagicMock()
+    mock_embeddings.embed_query.return_value = [0.1] * 768
+
+    results = search_chunks(
+        client=client,
+        collection_name="nonexistent_collection",
+        query="test query",
+        embedding_model=mock_embeddings,
+    )
+    assert results == []
+
+
+def test_search_chunks_ranks_by_similarity_and_threshold() -> None:
+    from unittest.mock import MagicMock
+
+    from app.models import Chunk
+    from app.vectorstore import index_chunks, search_chunks
+
+    client = QdrantClient(":memory:")
+    collection_name = "test_search"
+
+    chunk_a = Chunk(
+        source_path="notes/apple.md",
+        heading_path=["Fruits", "Apple"],
+        chunk_index=0,
+        content="Apples are sweet round pomaceous fruits.",
+    )
+    chunk_b = Chunk(
+        source_path="notes/quantum.md",
+        heading_path=["Physics", "Quantum"],
+        chunk_index=0,
+        content="Quantum entanglement occurs when particles share states.",
+    )
+
+    # 768-dimensional orthogonal vectors
+    vec_apple = [1.0] + [0.0] * 767
+    vec_quantum = [0.0, 1.0] + [0.0] * 766
+
+    mock_embeddings = MagicMock()
+    mock_embeddings.embed_documents.return_value = [vec_apple, vec_quantum]
+
+    index_chunks(
+        client=client,
+        collection_name=collection_name,
+        chunks=[chunk_a, chunk_b],
+        embedding_model=mock_embeddings,
+    )
+
+    # Query asking about fruits: vector points along the Apple dimension
+    mock_embeddings.embed_query.return_value = [1.0] + [0.0] * 767
+
+    # 1. Search without threshold
+    results = search_chunks(
+        client=client,
+        collection_name=collection_name,
+        query="What are apples?",
+        top_k=5,
+        embedding_model=mock_embeddings,
+    )
+
+    assert len(results) == 2
+    # Apple chunk should rank first with score ~ 1.0
+    assert results[0].chunk.source_path == "notes/apple.md"
+    assert results[0].chunk.heading_path == ["Fruits", "Apple"]
+    assert pytest.approx(results[0].score, rel=1e-2) == 1.0
+
+    # Quantum chunk should rank second with score ~ 0.0
+    assert results[1].chunk.source_path == "notes/quantum.md"
+    assert pytest.approx(results[1].score, abs=1e-2) == 0.0
+
+    # 2. Search with score_threshold = 0.5 (filters out quantum)
+    filtered = search_chunks(
+        client=client,
+        collection_name=collection_name,
+        query="What are apples?",
+        top_k=5,
+        score_threshold=0.5,
+        embedding_model=mock_embeddings,
+    )
+    assert len(filtered) == 1
+    assert filtered[0].chunk.source_path == "notes/apple.md"
+
+    # 3. Search with top_k = 1
+    top1 = search_chunks(
+        client=client,
+        collection_name=collection_name,
+        query="What are apples?",
+        top_k=1,
+        embedding_model=mock_embeddings,
+    )
+    assert len(top1) == 1
+    assert top1[0].chunk.source_path == "notes/apple.md"

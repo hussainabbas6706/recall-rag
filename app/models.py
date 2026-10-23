@@ -32,3 +32,24 @@ class Chunk(BaseModel):
     )
     chunk_index: int = Field(description="Deterministic 0-based sequence number within the file")
     content: str = Field(description="Clean text content for this chunk")
+
+
+class SearchResult(BaseModel):
+    chunk: Chunk
+    score: float = Field(description="Cosine similarity score between query and chunk vector")
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, description="Natural language search query")
+    top_k: int = Field(default=5, ge=1, le=20, description="Maximum number of chunks to return")
+    score_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional minimum cosine similarity score cutoff",
+    )
+
+
+class SearchResponse(BaseModel):
+    query: str
+    results: list[SearchResult]

@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from qdrant_client import QdrantClient, models
 
 from app.config import get_settings
-from app.embeddings import embed_texts
-from app.models import Chunk
+from app.embeddings import embed_query, embed_texts
+from app.models import Chunk, SearchResult
 
 
 def get_qdrant_client(url: str | None = None) -> QdrantClient:
@@ -88,3 +88,56 @@ def index_chunks(
         total_indexed += len(points)
 
     return total_indexed
+
+
+def search_chunks(
+    client: QdrantClient,
+    collection_name: str,
+    query: str,
+    top_k: int = 5,
+    score_threshold: float | None = None,
+    embedding_model=None,
+) -> list[SearchResult]:
+    """Search for relevant chunks in Qdrant matching the query text.
+
+    Args:
+        client: Connected QdrantClient instance.
+        collection_name: Target collection name.
+        query: User's natural language search text.
+        top_k: Maximum number of closest points to return.
+        score_threshold: Optional minimum cosine similarity cutoff.
+        embedding_model: Optional GoogleGenerativeAIEmbeddings instance (for testing).
+
+    Returns:
+        list[SearchResult]: Ranked matching chunks with similarity scores.
+    """
+    clean_query = query.strip()
+    if not clean_query:
+        raise ValueError("Query string cannot be empty.")
+
+    if not client.collection_exists(collection_name=collection_name):
+        return []
+
+    query_vector = embed_query(clean_query, model=embedding_model)
+
+    response = client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        limit=top_k,
+        score_threshold=score_threshold,
+        with_payload=True,
+    )
+
+    results: list[SearchResult] = []
+    for point in response.points:
+        if point.payload is None:
+            continue
+        chunk = Chunk(
+            source_path=point.payload["source_path"],
+            heading_path=point.payload.get("heading_path", []),
+            chunk_index=point.payload["chunk_index"],
+            content=point.payload["content"],
+        )
+        results.append(SearchResult(chunk=chunk, score=point.score))
+
+    return results

@@ -6,8 +6,14 @@ from fastapi import FastAPI, HTTPException
 
 from app.config import get_settings
 from app.ingest import find_markdown_files, parse_vault_chunks
-from app.models import HealthResponse, IngestRequest, IngestResponse
-from app.vectorstore import get_qdrant_client, index_chunks
+from app.models import (
+    HealthResponse,
+    IngestRequest,
+    IngestResponse,
+    SearchRequest,
+    SearchResponse,
+)
+from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
 
 app = FastAPI(
     title="Recall",
@@ -56,3 +62,27 @@ def ingest_vault(request: IngestRequest) -> IngestResponse:
             f"chunks into Qdrant collection '{settings.qdrant_collection}'."
         ),
     )
+
+
+@app.post("/search", response_model=SearchResponse)
+def search_vault(request: SearchRequest) -> SearchResponse:
+    """Search indexed Markdown chunks by semantic similarity."""
+    settings = get_settings()
+    try:
+        client = get_qdrant_client()
+        results = search_chunks(
+            client=client,
+            collection_name=settings.qdrant_collection,
+            query=request.query,
+            top_k=request.top_k,
+            score_threshold=request.score_threshold,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to query vectorstore: {error}",
+        ) from error
+
+    return SearchResponse(query=request.query, results=results)
