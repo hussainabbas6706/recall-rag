@@ -26,6 +26,7 @@ def test_prompt_contains_system_instruction() -> None:
     prompt = build_rag_prompt("What is this?", results)
     assert "personal knowledge assistant" in prompt
     assert "ONLY the context" in prompt
+    assert "I don't have enough information to answer that." in prompt
 
 
 def test_prompt_contains_question() -> None:
@@ -102,4 +103,3 @@ def test_prompt_sorts_chunks_sequentially_per_document() -> None:
     assert "[1] notes/doc_a.md" in prompt
     assert "[2] notes/doc_a.md" in prompt
     assert "[3] notes/doc_b.md" in prompt
-

@@ -135,6 +135,14 @@ def test_chat_endpoint_returns_error_when_retrieval_fails() -> None:
     assert "Failed to query vectorstore" in response.json()["detail"]
 
 
+def test_chat_endpoint_returns_bad_request_for_invalid_query() -> None:
+    with patch("app.main.search_chunks", side_effect=ValueError("Query string cannot be empty.")):
+        response = client.post("/chat", json={"query": " "})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Query string cannot be empty."
+
+
 def test_chat_endpoint_returns_error_when_generation_fails() -> None:
     results = [_search_result("notes/a.md", ["A"], "Relevant text.", 0.9, 0)]
     with (

@@ -1,0 +1,18 @@
+[
+  {
+    "query": "Which companies are job-application targets?",
+    "expected_source": "career/job-applications.md"
+  },
+  {
+    "query": "What library does Atlas use for its research workflow?",
+    "expected_source": "projects/atlas.md"
+  },
+  {
+    "query": "What does Recall retrieve and answer with?",
+    "expected_source": "projects/recall.md"
+  },
+  {
+    "query": "What should happen before the code freeze?",
+    "expected_source": "projects/recall.md"
+  }
+]

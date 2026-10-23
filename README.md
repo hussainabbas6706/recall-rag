@@ -11,7 +11,19 @@ Phases 1–4 are implemented:
 - **Phase 3 — Indexing and retrieval:** Gemini embeddings, Qdrant indexing, and semantic `/search`.
 - **Phase 4 — Answer generation:** `/chat` retrieves context, generates a grounded answer, and returns numbered source/heading citation metadata. If retrieval finds no chunks, it returns `I don't have enough information to answer that.` with no citations.
 
-**Phase 5 — Evaluation and polish remains:** evaluate retrieval and citation quality, unsupported questions, error handling, and end-to-end behavior. Live provider behavior should be validated with the fixture vault; citations are source metadata and do not guarantee answer correctness.
+**Phase 5 — Evaluation baseline and reliability checks:** offline failure-path tests, fixture-backed end-to-end coverage, deterministic retrieval regression checks, and a fixture-only live smoke check are in place. The small fixture set is not a substitute for evaluation on a larger representative vault. Citation metadata identifies retrieved sources but does not guarantee answer correctness.
+
+## Tests and retrieval evaluation
+
+Run the offline test suite with `uv run pytest -q`. A fixture-only retrieval regression check can be run with:
+
+```powershell
+uv run pytest tests/test_retrieval_evaluation.py -q -s
+```
+
+The benchmark uses four example questions, expected fixture source paths, in-memory Qdrant, and deterministic token vectors. It reports Hit@3 and mean reciprocal rank (MRR) so changes to the retrieval plumbing are visible and repeatable. These synthetic vectors do **not** measure Gemini embedding quality or predict performance on a personal vault. Live provider checks are optional and should use the fixture vault only.
+
+In one optional live run using Gemini embeddings and generation with in-memory Qdrant, the four fixture queries had Hit@3 **1.00** and MRR **1.00**. An answerable chat query returned a fixture citation, and an unsupported question with retrieved context received the instructed fallback answer. This is a small snapshot, not a general quality guarantee; the API still returns metadata for all retrieved chunks and does not independently validate answer claims or citation support.
 
 ## Local setup
 

@@ -48,3 +48,14 @@ def test_generate_answer_strips_output_whitespace() -> None:
 
     answer = generate_answer("A valid prompt", model=mock_model)
     assert answer == "Cleaned answer text."
+
+
+@pytest.mark.parametrize("content", ["", "   ", [" ", {"type": "image"}]])
+def test_generate_answer_rejects_empty_text_response(content) -> None:
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = content
+    mock_model.invoke.return_value = mock_response
+
+    with pytest.raises(ValueError, match="Chat model returned an empty response"):
+        generate_answer("A valid prompt", model=mock_model)

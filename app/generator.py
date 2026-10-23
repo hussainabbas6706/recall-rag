@@ -49,13 +49,19 @@ def generate_answer(
     response = chat_model.invoke(clean_prompt)
 
     if isinstance(response.content, str):
-        return response.content.strip()
-    if isinstance(response.content, list):
+        answer = response.content
+    elif isinstance(response.content, list):
         parts: list[str] = []
         for part in response.content:
             if isinstance(part, str):
                 parts.append(part)
             elif isinstance(part, dict) and "text" in part:
                 parts.append(str(part["text"]))
-        return "".join(parts).strip()
-    return str(response.content).strip()
+        answer = "".join(parts)
+    else:
+        answer = str(response.content)
+
+    clean_answer = answer.strip()
+    if not clean_answer:
+        raise ValueError("Chat model returned an empty response.")
+    return clean_answer
