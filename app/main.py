@@ -5,13 +5,22 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 
 from app.config import get_settings
+from app.generator import generate_answer
 from app.ingest import find_markdown_files, parse_vault_chunks
 from app.models import (
+    ChatCitation,
+    ChatRequest,
+    ChatResponse,
     HealthResponse,
     IngestRequest,
     IngestResponse,
     SearchRequest,
     SearchResponse,
+)
+from app.prompt import (
+    INSUFFICIENT_CONTEXT_ANSWER,
+    build_rag_prompt,
+    sort_results_sequentially,
 )
 from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
 
@@ -86,3 +95,49 @@ def search_vault(request: SearchRequest) -> SearchResponse:
         ) from error
 
     return SearchResponse(query=request.query, results=results)
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat_with_vault(request: ChatRequest) -> ChatResponse:
+    """Retrieve relevant notes and generate an answer with source references."""
+    settings = get_settings()
+    try:
+        client = get_qdrant_client()
+        results = search_chunks(
+            client=client,
+            collection_name=settings.qdrant_collection,
+            query=request.query,
+            top_k=request.top_k,
+            score_threshold=request.score_threshold,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to query vectorstore: {error}",
+        ) from error
+
+    if not results:
+        return ChatResponse(answer=INSUFFICIENT_CONTEXT_ANSWER, citations=[])
+
+    ordered_results = sort_results_sequentially(results)
+    prompt = build_rag_prompt(request.query, ordered_results)
+
+    try:
+        answer = generate_answer(prompt)
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate answer: {error}",
+        ) from error
+
+    citations = [
+        ChatCitation(
+            reference=reference,
+            source_path=result.chunk.source_path,
+            heading_path=result.chunk.heading_path,
+        )
+        for reference, result in enumerate(ordered_results, start=1)
+    ]
+    return ChatResponse(answer=answer, citations=citations)

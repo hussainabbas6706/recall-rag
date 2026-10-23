@@ -53,3 +53,22 @@ class SearchRequest(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
+
+
+class ChatRequest(SearchRequest):
+    """Input for generating an answer from retrieved vault chunks."""
+
+
+class ChatCitation(BaseModel):
+    """Source metadata corresponding to a numbered reference in an answer."""
+
+    reference: int = Field(ge=1, description="1-based reference number used in the answer")
+    source_path: str = Field(description="Relative path from the vault root")
+    heading_path: list[str] = Field(
+        default_factory=list, description="Heading hierarchy for the cited chunk"
+    )
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    citations: list[ChatCitation]
