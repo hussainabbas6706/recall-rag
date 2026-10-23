@@ -1,0 +1,45 @@
+:root {
+  font-family: system-ui, 'Segoe UI', sans-serif;
+  color: #282923;
+  background: #f8f7f4;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --ink: #282923;
+  --ink-soft: #55564e;
+  --muted: #777970;
+  --line: #e8e6df;
+  --surface: #fff;
+  --accent: #42624f;
+  --accent-wash: #edf2ee;
+  --serif: Georgia, 'Times New Roman', serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font-optical-sizing: auto;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+textarea {
+  font-family: inherit;
+}
+
+code {
+  font-family: var(--mono);
+}
+
+::selection {
+  color: white;
+  background: var(--accent);
+}
