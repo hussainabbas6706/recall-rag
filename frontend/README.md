@@ -17,5 +17,6 @@ The browser calls the same-origin `/api` path; Vite proxies those requests to
 set `RECALL_API_PROXY_TARGET` before starting Vite. Never put API keys or
 secrets in frontend environment variables.
 
-The frontend currently checks `GET /health`. Ingestion and chat controls are
-not connected yet.
+The frontend checks `GET /health`, can ingest the backend-configured vault
+with `POST /ingest`, and can submit questions to `POST /chat`. The browser
+does not select or reveal the backend's local vault path.
