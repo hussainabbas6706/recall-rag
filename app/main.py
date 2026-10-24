@@ -1,8 +1,10 @@
 """FastAPI entrypoint for Recall."""
 
+import logging
 from pathlib import Path
+from time import perf_counter
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
 from app.config import get_settings
 from app.generator import generate_answer
@@ -24,11 +26,30 @@ from app.prompt import (
 )
 from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="Recall",
     version="0.1.0",
     description="Search and chat with an Obsidian vault, with grounded citations.",
 )
+
+
+@app.middleware("http")
+async def log_request_duration(request: Request, call_next):
+    started = perf_counter()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        logger.info(
+            "timing stage=request.total method=%s path=%s status_code=%d duration_ms=%.2f",
+            request.method,
+            request.url.path,
+            response.status_code if response is not None else 500,
+            (perf_counter() - started) * 1000,
+        )
 
 
 @app.get("/health", response_model=HealthResponse)

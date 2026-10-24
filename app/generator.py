@@ -1,9 +1,14 @@
 """Answer generation using Google's Gemini chat model."""
 
+import logging
+from time import perf_counter
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_chat_model(api_key: str | None = None) -> BaseChatModel:
@@ -46,7 +51,14 @@ def generate_answer(
         raise ValueError("Prompt cannot be empty.")
 
     chat_model = model or get_chat_model()
-    response = chat_model.invoke(clean_prompt)
+    generation_started = perf_counter()
+    try:
+        response = chat_model.invoke(clean_prompt)
+    finally:
+        logger.info(
+            "timing stage=generation.gemini duration_ms=%.2f",
+            (perf_counter() - generation_started) * 1000,
+        )
 
     if isinstance(response.content, str):
         answer = response.content
