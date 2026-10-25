@@ -1,6 +1,8 @@
 """Pydantic models defining Recall's public API contract."""
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthResponse(BaseModel):
@@ -9,10 +11,7 @@ class HealthResponse(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    vault_path: str | None = Field(
-        default=None,
-        description="Optional local vault path. Defaults to VAULT_PATH.",
-    )
+    model_config = ConfigDict(extra="forbid")
 
 
 class IngestResponse(BaseModel):
@@ -21,6 +20,15 @@ class IngestResponse(BaseModel):
     chunks_created: int = 0
     chunks_indexed: int = 0
     message: str
+
+
+class VaultEntry(BaseModel):
+    path: str = Field(description="Path relative to the configured vault root")
+    kind: Literal["folder", "file"]
+
+
+class VaultResponse(BaseModel):
+    entries: list[VaultEntry]
 
 
 class Chunk(BaseModel):

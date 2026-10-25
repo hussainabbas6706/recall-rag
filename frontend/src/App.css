@@ -214,8 +214,60 @@
   min-height: 190px;
 }
 
+.vault-panel {
+  grid-column: 1 / -1;
+}
+
 .chat-panel {
   grid-column: 1 / -1;
+}
+
+.vault-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.vault-toolbar .panel-copy {
+  margin: 0;
+}
+
+.vault-tree-container {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfaf7;
+}
+
+.vault-tree,
+.vault-tree ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  list-style: none;
+}
+
+.vault-tree {
+  padding-left: 0;
+}
+
+.vault-tree summary,
+.vault-file {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.vault-tree summary {
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .panel-heading {

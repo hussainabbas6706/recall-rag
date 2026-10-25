@@ -1,30 +1,98 @@
 """Vault discovery and Markdown parsing into structured chunks."""
 
 import logging
+import os
 from pathlib import Path
 from time import perf_counter
 
 from app.chunking import chunk_markdown
-from app.models import Chunk
+from app.models import Chunk, VaultEntry
 
 logger = logging.getLogger(__name__)
 
 IGNORED_DIRECTORY_NAMES = {".git", ".obsidian", ".trash"}
 
 
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
+def list_vault_entries(vault_path: Path) -> list[VaultEntry]:
+    """List safe, vault-relative folders and Markdown files without reading notes."""
+    try:
+        vault_root = vault_path.resolve(strict=True)
+    except FileNotFoundError as error:
+        raise FileNotFoundError("Configured vault path does not exist.") from error
+
+    if not vault_root.is_dir():
+        raise NotADirectoryError("Configured vault path is not a directory.")
+
+    entries: list[VaultEntry] = []
+    for current, directory_names, file_names in os.walk(
+        vault_root,
+        topdown=True,
+        followlinks=False,
+        onerror=_raise_walk_error,
+    ):
+        current_path = Path(current)
+        safe_directory_names = []
+        for name in sorted(directory_names):
+            directory = current_path / name
+            if (
+                name.startswith(".")
+                or name in IGNORED_DIRECTORY_NAMES
+                or directory.is_symlink()
+            ):
+                continue
+            try:
+                if not directory.resolve(strict=True).is_relative_to(vault_root):
+                    continue
+            except (OSError, RuntimeError):
+                continue
+            safe_directory_names.append(name)
+            entries.append(
+                VaultEntry(
+                    path=directory.relative_to(vault_root).as_posix(),
+                    kind="folder",
+                )
+            )
+        directory_names[:] = safe_directory_names
+
+        for name in sorted(file_names):
+            file_path = current_path / name
+            if name.startswith(".") or file_path.suffix.lower() != ".md":
+                continue
+            if file_path.is_symlink():
+                continue
+            try:
+                resolved_file = file_path.resolve(strict=True)
+                if not resolved_file.is_relative_to(vault_root) or not resolved_file.is_file():
+                    continue
+            except (OSError, RuntimeError):
+                continue
+            entries.append(
+                VaultEntry(
+                    path=file_path.relative_to(vault_root).as_posix(),
+                    kind="file",
+                )
+            )
+
+    return sorted(entries, key=lambda entry: (entry.path.casefold(), entry.path))
+
+
 def find_markdown_files(vault_path: Path) -> list[Path]:
-    """Return Markdown files, excluding Obsidian and VCS implementation directories."""
+    """Return safe Markdown files inside the vault, excluding internal paths."""
     if not vault_path.exists():
-        raise FileNotFoundError(f"Vault path does not exist: {vault_path}")
+        raise FileNotFoundError("Configured vault path does not exist.")
     if not vault_path.is_dir():
-        raise NotADirectoryError(f"Vault path is not a directory: {vault_path}")
+        raise NotADirectoryError("Configured vault path is not a directory.")
 
     started = perf_counter()
-    files = sorted(
-        path
-        for path in vault_path.rglob("*.md")
-        if not any(parent.name in IGNORED_DIRECTORY_NAMES for parent in path.parents)
-    )
+    files = [
+        vault_path / entry.path
+        for entry in list_vault_entries(vault_path)
+        if entry.kind == "file"
+    ]
     logger.info(
         "timing stage=ingestion.discovery files=%d duration_ms=%.2f",
         len(files),

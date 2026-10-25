@@ -1,6 +1,7 @@
 """Fixture-backed API flow using in-memory Qdrant and deterministic embeddings."""
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -16,6 +17,13 @@ def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
     client = TestClient(app)
 
     with (
+        patch(
+            "app.main.get_settings",
+            return_value=SimpleNamespace(
+                vault_path=FIXTURE_VAULT,
+                qdrant_collection="fixture_test_collection",
+            ),
+        ),
         patch("app.main.get_qdrant_client", return_value=qdrant),
         patch(
             "app.vectorstore.embed_texts",
@@ -32,7 +40,7 @@ def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
             return_value="Recall retrieves Markdown chunks from Qdrant [1].",
         ) as generate,
     ):
-        ingest_response = client.post("/ingest", json={"vault_path": str(FIXTURE_VAULT)})
+        ingest_response = client.post("/ingest", json={})
         assert ingest_response.status_code == 200, ingest_response.text
         assert ingest_response.json()["chunks_indexed"] == 4
 

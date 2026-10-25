@@ -19,4 +19,7 @@ secrets in frontend environment variables.
 
 The frontend checks `GET /health`, can ingest the backend-configured vault
 with `POST /ingest`, and can submit questions to `POST /chat`. The browser
-does not select or reveal the backend's local vault path.
+also displays vault-relative folder and Markdown filenames from the read-only
+`GET /vault` endpoint. The listing does not include note contents or the
+backend's absolute vault path. The browser does not select the backend's
+local vault.

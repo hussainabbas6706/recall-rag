@@ -1,14 +1,13 @@
 """FastAPI entrypoint for Recall."""
 
 import logging
-from pathlib import Path
 from time import perf_counter
 
 from fastapi import FastAPI, HTTPException, Request
 
 from app.config import get_settings
 from app.generator import generate_answer
-from app.ingest import find_markdown_files, parse_vault_chunks
+from app.ingest import find_markdown_files, list_vault_entries, parse_vault_chunks
 from app.models import (
     ChatCitation,
     ChatRequest,
@@ -18,6 +17,7 @@ from app.models import (
     IngestResponse,
     SearchRequest,
     SearchResponse,
+    VaultResponse,
 )
 from app.prompt import (
     INSUFFICIENT_CONTEXT_ANSWER,
@@ -58,16 +58,33 @@ def health() -> HealthResponse:
     return HealthResponse()
 
 
+@app.get("/vault", response_model=VaultResponse)
+def get_vault() -> VaultResponse:
+    """List folders and Markdown files in the configured vault."""
+    try:
+        entries = list_vault_entries(get_settings().vault_path)
+    except (FileNotFoundError, NotADirectoryError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail="The configured vault path is missing or is not a directory.",
+        ) from error
+
+    return VaultResponse(entries=entries)
+
+
 @app.post("/ingest", response_model=IngestResponse)
 def ingest_vault(request: IngestRequest) -> IngestResponse:
     """Discover, chunk, and index Markdown notes into Qdrant."""
     settings = get_settings()
-    vault_path = Path(request.vault_path) if request.vault_path else settings.vault_path
+    vault_path = settings.vault_path
     try:
         files = find_markdown_files(vault_path)
         chunks = parse_vault_chunks(vault_path)
     except (FileNotFoundError, NotADirectoryError) as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise HTTPException(
+            status_code=400,
+            detail="The configured vault path is missing or is not a directory.",
+        ) from error
 
     try:
         client = get_qdrant_client()

@@ -16,6 +16,24 @@ export async function getHealth({ signal } = {}) {
   return health
 }
 
+export async function getVault({ signal } = {}) {
+  const response = await fetch(`${API_BASE_URL}/vault`, { signal })
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error(`The API returned an unreadable response (HTTP ${response.status}).`)
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.detail || `Vault listing failed with HTTP ${response.status}.`)
+  }
+  if (!Array.isArray(data.entries)) {
+    throw new Error('The API returned an unexpected vault listing.')
+  }
+  return data.entries
+}
+
 async function postJson(path, payload) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',

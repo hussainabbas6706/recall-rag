@@ -1,10 +1,60 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import { API_BASE_URL, chatWithRecall, getHealth, ingestVault } from './api.js'
+import {
+  API_BASE_URL,
+  chatWithRecall,
+  getHealth,
+  getVault,
+  ingestVault,
+} from './api.js'
+
+function VaultTreeNodes({ nodes }) {
+  return (
+    <ul className="vault-tree">
+      {nodes.map((node) => (
+        <li key={node.path}>
+          {node.kind === 'folder' ? (
+            <details open>
+              <summary>{node.name}</summary>
+              {node.children.length > 0 && <VaultTreeNodes nodes={node.children} />}
+            </details>
+          ) : (
+            <span className="vault-file">{node.name}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function buildVaultTree(entries) {
+  const root = { children: [] }
+  for (const entry of entries) {
+    let parent = root
+    const parts = entry.path.split('/')
+    parts.forEach((name, index) => {
+      const path = parts.slice(0, index + 1).join('/')
+      let node = parent.children.find((child) => child.path === path)
+      if (!node) {
+        node = {
+          name,
+          path,
+          kind: index === parts.length - 1 ? entry.kind : 'folder',
+          children: [],
+        }
+        parent.children.push(node)
+      }
+      parent = node
+    })
+  }
+  return root.children
+}
 
 function App() {
   const [health, setHealth] = useState({ status: 'checking', error: '' })
   const [healthCheckId, setHealthCheckId] = useState(0)
+  const [vault, setVault] = useState({ status: 'loading', entries: [], error: '' })
+  const [vaultRefreshId, setVaultRefreshId] = useState(0)
   const [ingestion, setIngestion] = useState({ status: 'idle', result: null, error: '' })
   const [question, setQuestion] = useState('')
   const [chat, setChat] = useState({ status: 'idle', question: '', result: null, error: '' })
@@ -25,6 +75,23 @@ function App() {
 
     return () => controller.abort()
   }, [healthCheckId])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setVault({ status: 'loading', entries: [], error: '' })
+
+    getVault({ signal: controller.signal })
+      .then((entries) => {
+        setVault({ status: 'success', entries, error: '' })
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setVault({ status: 'error', entries: [], error: error.message })
+        }
+      })
+
+    return () => controller.abort()
+  }, [vaultRefreshId])
 
   const statusMessage = {
     checking: 'Checking Recall API…',
@@ -133,7 +200,7 @@ function App() {
             Index the Markdown notes from the vault configured by the backend.
           </p>
           <p className="panel-note">
-            The vault path is configured on the backend. This page cannot browse your computer’s folders.
+            The backend provides the configured vault’s folder and Markdown file names.
           </p>
           <button
             className="button button-secondary"
@@ -157,9 +224,44 @@ function App() {
           )}
         </article>
 
-        <article className="panel chat-panel" aria-labelledby="chat-title">
+        <article className="panel vault-panel" aria-labelledby="vault-title">
           <div className="panel-heading">
             <div className="section-icon" aria-hidden="true">03</div>
+            <div>
+              <p className="eyebrow">CONFIGURED VAULT</p>
+              <h2 id="vault-title">Vault files</h2>
+            </div>
+          </div>
+          <div className="vault-toolbar">
+            <p className="panel-copy">Folders and Markdown filenames only; note contents stay private.</p>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => setVaultRefreshId((current) => current + 1)}
+              disabled={vault.status === 'loading'}
+            >
+              {vault.status === 'loading' ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+          {vault.status === 'loading' && (
+            <p className="feedback" role="status">Loading configured vault files…</p>
+          )}
+          {vault.status === 'error' && (
+            <p className="feedback feedback-error" role="alert">{vault.error}</p>
+          )}
+          {vault.status === 'success' && vault.entries.length === 0 && (
+            <p className="feedback" role="status">No folders or Markdown files were found.</p>
+          )}
+          {vault.status === 'success' && vault.entries.length > 0 && (
+            <div className="vault-tree-container" aria-label="Configured vault tree">
+              <VaultTreeNodes nodes={buildVaultTree(vault.entries)} />
+            </div>
+          )}
+        </article>
+
+        <article className="panel chat-panel" aria-labelledby="chat-title">
+          <div className="panel-heading">
+            <div className="section-icon" aria-hidden="true">04</div>
             <div>
               <p className="eyebrow">ASK YOUR NOTES</p>
               <h2 id="chat-title">Chat with Recall</h2>
