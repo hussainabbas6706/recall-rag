@@ -6,12 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.indexing import IndexingFailure, IndexingResult
 from app.ingest import find_markdown_files, list_vault_entries, parse_vault_chunks
 from app.main import app
 from app.models import IngestRequest
+from app.vault_session import collection_name_for_vault
 
 FIXTURE_VAULT = Path("tests/fixtures/vault")
-client = TestClient(app)
+client = TestClient(app, client=("127.0.0.1", 50000))
 
 
 def test_find_markdown_files_returns_fixture_notes() -> None:
@@ -51,16 +53,14 @@ def test_parse_vault_chunks_fixture_vault() -> None:
     assert recall_chunks[1].chunk_index == 1
 
 
-def test_ingest_endpoint_indexes_fixture_vault() -> None:
-    settings = SimpleNamespace(
-        vault_path=FIXTURE_VAULT,
-        qdrant_collection="test_collection",
-    )
+def test_ingest_endpoint_indexes_fixture_vault(selected_fixture_vault) -> None:
     with (
-        patch("app.main.get_settings", return_value=settings),
-        patch("app.main.index_chunks", return_value=4) as mock_index,
+        patch(
+            "app.main.index_vault_incrementally",
+            return_value=IndexingResult(files_found=3, files_indexed=3, chunks_indexed=4),
+        ) as mock_index,
     ):
-        response = client.post("/ingest", json={})
+        response = client.post("/ingest", json={"vault_id": str(selected_fixture_vault.vault_id)})
 
         assert response.status_code == 200
         data = response.json()
@@ -68,63 +68,87 @@ def test_ingest_endpoint_indexes_fixture_vault() -> None:
         assert data["files_found"] == 3
         assert data["chunks_created"] == 4
         assert data["chunks_indexed"] == 4
+        assert data["files_indexed"] == 3
         mock_index.assert_called_once()
+        assert mock_index.call_args.kwargs["collection_name"] == (
+            collection_name_for_vault(selected_fixture_vault.path)
+        )
 
 
-def test_ingest_endpoint_indexing_failure_returns_500() -> None:
-    settings = SimpleNamespace(
-        vault_path=FIXTURE_VAULT,
-        qdrant_collection="test_collection",
-    )
+def test_ingest_endpoint_indexing_failure_returns_500(selected_fixture_vault) -> None:
     with (
-        patch("app.main.get_settings", return_value=settings),
-        patch("app.main.index_chunks", side_effect=RuntimeError("Connection refused")),
+        patch(
+            "app.main.index_vault_incrementally",
+            side_effect=RuntimeError("Connection refused"),
+        ),
     ):
-        response = client.post("/ingest", json={})
+        response = client.post("/ingest", json={"vault_id": str(selected_fixture_vault.vault_id)})
 
         assert response.status_code == 500
         assert "Failed to index chunks into Qdrant" in response.json()["detail"]
 
 
+def test_ingest_endpoint_reports_partial_note_failures(selected_fixture_vault) -> None:
+    result = IndexingResult(
+        files_found=2,
+        files_indexed=1,
+        chunks_indexed=3,
+        failures=[IndexingFailure("broken.md", "UnicodeError: invalid text encoding")],
+    )
+    with patch("app.main.index_vault_incrementally", return_value=result):
+        response = client.post(
+            "/ingest",
+            json={"vault_id": str(selected_fixture_vault.vault_id)},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "partial"
+    assert data["files_indexed"] == 1
+    assert data["failures"] == [
+        {"source_path": "broken.md", "reason": "UnicodeError: invalid text encoding"}
+    ]
+
+
 def test_ingest_request_rejects_extra_path_fields() -> None:
     with pytest.raises(ValidationError):
-        IngestRequest.model_validate({"vault_path": "C:/outside-vault"})
+        IngestRequest.model_validate(
+            {
+                "vault_id": "f9cb6e98-4955-4a62-a735-c0cb72baaf06",
+                "vault_path": "C:/outside-vault",
+            }
+        )
 
 
 def test_ingest_endpoint_rejects_external_path_without_reading_or_indexing(
-    tmp_path: Path,
+    tmp_path: Path, selected_fixture_vault
 ) -> None:
     external_note = tmp_path / "outside.md"
     external_note.write_text("must not be ingested", encoding="utf-8")
     with (
-        patch("app.main.find_markdown_files") as find_files,
-        patch("app.main.index_chunks") as index,
+        patch("app.indexing.find_markdown_files") as find_files,
+        patch("app.main.index_vault_incrementally") as index,
     ):
-        response = client.post("/ingest", json={"vault_path": str(tmp_path)})
+        response = client.post(
+            "/ingest",
+            json={"vault_id": str(selected_fixture_vault.vault_id), "vault_path": str(tmp_path)},
+        )
 
     assert response.status_code == 422
     find_files.assert_not_called()
     index.assert_not_called()
 
 
-def test_ingest_endpoint_uses_configured_vault_and_hides_invalid_path(
-    tmp_path: Path,
-) -> None:
-    settings = SimpleNamespace(
-        vault_path=tmp_path / "missing-vault",
-        qdrant_collection="test_collection",
-    )
-    with (
-        patch("app.main.get_settings", return_value=settings),
-        patch("app.main.index_chunks") as index,
-    ):
-        response = client.post("/ingest", json={})
+def test_ingest_endpoint_requires_current_vault_selection() -> None:
+    from uuid import uuid4
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == (
-        "The configured vault path is missing or is not a directory."
-    )
-    assert str(tmp_path) not in response.text
+    with (
+        patch("app.main.index_vault_incrementally") as index,
+    ):
+        response = client.post("/ingest", json={"vault_id": str(uuid4())})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "This vault selection is no longer active. Select the vault again."
     index.assert_not_called()
 
 
@@ -225,3 +249,134 @@ def test_vault_endpoint_rejects_configured_path_that_is_a_file(tmp_path: Path) -
 
     assert response.status_code == 400
     assert str(configured_path) not in response.text
+
+
+def test_vault_select_endpoint_returns_only_relative_tree_data(tmp_path: Path) -> None:
+    note = tmp_path / "projects" / "fixture.md"
+    note.parent.mkdir()
+    note.write_text("private fixture note content", encoding="utf-8")
+    with patch("app.main.choose_vault_directory", return_value=tmp_path):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == tmp_path.name
+    assert data["entries"] == [
+        {"path": "projects", "kind": "folder"},
+        {"path": "projects/fixture.md", "kind": "file"},
+    ]
+    assert "private fixture note content" not in response.text
+    assert str(tmp_path) not in response.text
+
+
+def test_vault_selection_endpoint_restores_active_selection(
+    selected_fixture_vault,
+) -> None:
+    response = client.get("/vault/selection")
+
+    assert response.status_code == 200
+    assert response.json()["vault_id"] == str(selected_fixture_vault.vault_id)
+    assert response.json()["name"] == selected_fixture_vault.path.name
+    assert all(
+        not Path(entry["path"]).is_absolute()
+        for entry in response.json()["entries"]
+    )
+
+
+def test_vault_selection_endpoint_returns_no_content_when_unselected() -> None:
+    assert client.get("/vault/selection").status_code == 204
+
+
+def test_vault_select_cancellation_preserves_active_selection(
+    selected_fixture_vault,
+) -> None:
+    with patch("app.main.choose_vault_directory", return_value=None):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 204
+    restored = client.get("/vault/selection")
+    assert restored.status_code == 200
+    assert restored.json()["vault_id"] == str(selected_fixture_vault.vault_id)
+
+
+def test_vault_select_rejects_non_local_origin() -> None:
+    non_local_client = TestClient(app, client=("127.0.0.1", 50000))
+    with patch("app.main.choose_vault_directory") as choose:
+        response = non_local_client.post(
+            "/vault/select",
+            headers={"Origin": "https://example.com"},
+        )
+
+    assert response.status_code == 403
+    choose.assert_not_called()
+
+
+def test_vault_select_rejects_non_loopback_client() -> None:
+    remote_client = TestClient(app, client=("192.0.2.10", 50000))
+    with patch("app.main.choose_vault_directory") as choose:
+        response = remote_client.post("/vault/select")
+
+    assert response.status_code == 403
+    choose.assert_not_called()
+
+
+def test_vault_select_rejects_invalid_folder_without_replacing_selection(
+    tmp_path: Path, selected_fixture_vault
+) -> None:
+    not_a_directory = tmp_path / "note.md"
+    not_a_directory.write_text("fixture", encoding="utf-8")
+    with patch("app.main.choose_vault_directory", return_value=not_a_directory):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 400
+    assert str(tmp_path) not in response.text
+    restored = client.get("/vault/selection")
+    assert restored.status_code == 200
+    assert restored.json()["vault_id"] == str(selected_fixture_vault.vault_id)
+
+
+def test_vault_switch_issues_new_id_and_invalidates_previous_selection(
+    tmp_path: Path, selected_fixture_vault
+) -> None:
+    old_vault_id = selected_fixture_vault.vault_id
+    next_vault = tmp_path / "next-vault"
+    next_vault.mkdir()
+    with patch("app.main.choose_vault_directory", return_value=next_vault):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 200
+    new_vault_id = response.json()["vault_id"]
+    assert new_vault_id != str(old_vault_id)
+    with patch("app.main.search_chunks") as search:
+        stale_search = client.post(
+            "/search",
+            json={"query": "old notes", "vault_id": str(old_vault_id)},
+        )
+    assert stale_search.status_code == 409
+    search.assert_not_called()
+
+
+def test_vault_select_reports_unavailable_native_picker() -> None:
+    with patch(
+        "app.main.choose_vault_directory",
+        side_effect=RuntimeError("native details must not leak"),
+    ):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 503
+    assert "native details must not leak" not in response.text
+
+
+def test_vault_select_rejects_symlink_root_when_supported(tmp_path: Path) -> None:
+    linked_vault = tmp_path / "linked-vault"
+    try:
+        linked_vault.symlink_to(FIXTURE_VAULT.resolve(), target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"Symlink creation is not supported: {error}")
+
+    with patch("app.main.choose_vault_directory", return_value=linked_vault):
+        response = client.post("/vault/select")
+
+    assert response.status_code == 400
+    assert "symbolic link" in response.json()["detail"]
+    assert str(tmp_path) not in response.text

@@ -12,7 +12,7 @@ def test_ensure_collection_exists_creates_collection() -> None:
 
     assert not client.collection_exists(collection_name)
 
-    created = ensure_collection_exists(client, collection_name=collection_name, vector_size=768)
+    created = ensure_collection_exists(client, collection_name=collection_name, vector_size=384)
     assert created is True
     assert client.collection_exists(collection_name)
 
@@ -20,7 +20,7 @@ def test_ensure_collection_exists_creates_collection() -> None:
     collection_info = client.get_collection(collection_name)
     vectors_config = collection_info.config.params.vectors
     assert isinstance(vectors_config, models.VectorParams)
-    assert vectors_config.size == 768
+    assert vectors_config.size == 384
     assert vectors_config.distance == models.Distance.COSINE
 
 
@@ -29,12 +29,19 @@ def test_ensure_collection_exists_is_idempotent() -> None:
     collection_name = "test_chunks"
 
     # First call creates the collection
-    first_call = ensure_collection_exists(client, collection_name=collection_name, vector_size=768)
+    first_call = ensure_collection_exists(client, collection_name=collection_name, vector_size=384)
     assert first_call is True
 
     # Second call detects it already exists and returns False safely
-    second_call = ensure_collection_exists(client, collection_name=collection_name, vector_size=768)
+    second_call = ensure_collection_exists(client, collection_name=collection_name, vector_size=384)
     assert second_call is False
+
+
+def test_ensure_collection_rejects_non_local_embedding_dimensions() -> None:
+    client = QdrantClient(":memory:")
+    with pytest.raises(ValueError, match="requires 384-dimensional vectors"):
+        ensure_collection_exists(client, "wrong_dimensions", vector_size=768)
+    assert not client.collection_exists("wrong_dimensions")
 
 
 def test_get_qdrant_client_initialization() -> None:
@@ -87,9 +94,9 @@ def test_index_chunks_indexes_payload_and_vectors() -> None:
     ]
 
     mock_embeddings = MagicMock()
-    # Return dummy vectors of 768 dimensions
-    dummy_vec1 = [0.1] * 768
-    dummy_vec2 = [0.2] * 768
+    # Return dummy vectors of 384 dimensions
+    dummy_vec1 = [0.1] * 384
+    dummy_vec2 = [0.2] * 384
     mock_embeddings.embed_documents.return_value = [dummy_vec1, dummy_vec2]
 
     indexed_count = index_chunks(
@@ -121,7 +128,7 @@ def test_index_chunks_indexes_payload_and_vectors() -> None:
     assert by_id[point_id_1].payload["chunk_index"] == 0
     assert by_id[point_id_1].payload["content"] == "Recall uses Qdrant for vector retrieval."
     # Qdrant normalizes vectors to unit length under Cosine distance
-    assert len(by_id[point_id_1].vector) == 768
+    assert len(by_id[point_id_1].vector) == 384
     norm = sum(x * x for x in by_id[point_id_1].vector) ** 0.5
     assert pytest.approx(norm, rel=1e-3) == 1.0
 
@@ -153,7 +160,7 @@ def test_search_chunks_nonexistent_collection_returns_empty() -> None:
 
     client = QdrantClient(":memory:")
     mock_embeddings = MagicMock()
-    mock_embeddings.embed_query.return_value = [0.1] * 768
+    mock_embeddings.embed_query.return_value = [0.1] * 384
 
     results = search_chunks(
         client=client,
@@ -186,9 +193,9 @@ def test_search_chunks_ranks_by_similarity_and_threshold() -> None:
         content="Quantum entanglement occurs when particles share states.",
     )
 
-    # 768-dimensional orthogonal vectors
-    vec_apple = [1.0] + [0.0] * 767
-    vec_quantum = [0.0, 1.0] + [0.0] * 766
+    # 384-dimensional orthogonal vectors
+    vec_apple = [1.0] + [0.0] * 383
+    vec_quantum = [0.0, 1.0] + [0.0] * 382
 
     mock_embeddings = MagicMock()
     mock_embeddings.embed_documents.return_value = [vec_apple, vec_quantum]
@@ -201,7 +208,7 @@ def test_search_chunks_ranks_by_similarity_and_threshold() -> None:
     )
 
     # Query asking about fruits: vector points along the Apple dimension
-    mock_embeddings.embed_query.return_value = [1.0] + [0.0] * 767
+    mock_embeddings.embed_query.return_value = [1.0] + [0.0] * 383
 
     # 1. Search without threshold
     results = search_chunks(

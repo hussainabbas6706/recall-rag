@@ -1,7 +1,5 @@
 """Fixture-backed API flow using in-memory Qdrant and deterministic embeddings."""
 
-from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -9,24 +7,17 @@ from qdrant_client import QdrantClient
 
 from app.main import app
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault"
 
-
-def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
+def test_fixture_ingest_search_and_chat_flow(
+    deterministic_embeddings, selected_fixture_vault
+) -> None:
     qdrant = QdrantClient(":memory:")
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     with (
-        patch(
-            "app.main.get_settings",
-            return_value=SimpleNamespace(
-                vault_path=FIXTURE_VAULT,
-                qdrant_collection="fixture_test_collection",
-            ),
-        ),
         patch("app.main.get_qdrant_client", return_value=qdrant),
         patch(
-            "app.vectorstore.embed_texts",
+            "app.indexing.embed_texts",
             side_effect=lambda texts, model=None: deterministic_embeddings.embed_documents(
                 texts
             ),
@@ -40,13 +31,20 @@ def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
             return_value="Recall retrieves Markdown chunks from Qdrant [1].",
         ) as generate,
     ):
-        ingest_response = client.post("/ingest", json={})
+        ingest_response = client.post(
+            "/ingest",
+            json={"vault_id": str(selected_fixture_vault.vault_id)},
+        )
         assert ingest_response.status_code == 200, ingest_response.text
         assert ingest_response.json()["chunks_indexed"] == 4
 
         search_response = client.post(
             "/search",
-            json={"query": "What does Recall retrieve and answer with?", "top_k": 3},
+            json={
+                "query": "What does Recall retrieve and answer with?",
+                "top_k": 3,
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
         )
         assert search_response.status_code == 200
         search_results = search_response.json()["results"]
@@ -55,7 +53,11 @@ def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
 
         chat_response = client.post(
             "/chat",
-            json={"query": "What does Recall retrieve and answer with?", "top_k": 3},
+            json={
+                "query": "What does Recall retrieve and answer with?",
+                "top_k": 3,
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
         )
         assert chat_response.status_code == 200
         chat_data = chat_response.json()
@@ -74,6 +76,7 @@ def test_fixture_ingest_search_and_chat_flow(deterministic_embeddings) -> None:
                 "query": "What is the weather on Mars?",
                 "top_k": 3,
                 "score_threshold": 0.99,
+                "vault_id": str(selected_fixture_vault.vault_id),
             },
         )
         assert unsupported_response.status_code == 200

@@ -5,8 +5,10 @@ from pathlib import Path
 import typer
 
 from app.config import get_settings
+from app.indexing import index_vault_incrementally
 from app.ingest import find_markdown_files, parse_vault_chunks
-from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
+from app.vault_session import collection_name_for_vault
+from app.vectorstore import get_qdrant_client, search_chunks
 
 cli = typer.Typer(help="Local development commands for Recall.")
 
@@ -43,14 +45,22 @@ def index(vault_path: Path | None = None) -> None:
     """Parse and index vault notes into Qdrant."""
     settings = get_settings()
     path = vault_path or settings.vault_path
-    typer.echo(f"Indexing vault from: {path}")
-    parsed_chunks = parse_vault_chunks(path)
-    typer.echo(
-        f"Parsed {len(parsed_chunks)} chunk(s). Connecting to Qdrant at {settings.qdrant_url}..."
-    )
+    typer.echo(f"Incrementally indexing vault at {path} into Qdrant at {settings.qdrant_url}...")
     client = get_qdrant_client()
-    count = index_chunks(client, collection_name=settings.qdrant_collection, chunks=parsed_chunks)
-    typer.echo(f"Successfully indexed {count} chunk(s) into '{settings.qdrant_collection}'.")
+    collection_name = collection_name_for_vault(path)
+    result = index_vault_incrementally(
+        client=client,
+        collection_name=collection_name,
+        vault_path=path,
+    )
+    typer.echo(
+        f"Index result for '{collection_name}': {result.files_indexed} new, "
+        f"{result.files_updated} updated, {result.files_unchanged} unchanged, "
+        f"{result.files_deleted} deleted, {result.chunks_indexed} chunks indexed, "
+        f"{len(result.failures)} failed."
+    )
+    for failure in result.failures:
+        typer.echo(f"- {failure.source_path}: {failure.reason}")
 
 
 @cli.command()
@@ -58,12 +68,13 @@ def stats() -> None:
     """Show status and point count of the Qdrant collection."""
     settings = get_settings()
     client = get_qdrant_client()
-    if not client.collection_exists(settings.qdrant_collection):
-        typer.echo(f"Collection '{settings.qdrant_collection}' does not exist in Qdrant yet.")
+    collection_name = collection_name_for_vault(settings.vault_path)
+    if not client.collection_exists(collection_name):
+        typer.echo(f"Collection '{collection_name}' does not exist in Qdrant yet.")
         return
 
-    info = client.get_collection(settings.qdrant_collection)
-    typer.echo(f"Collection: {settings.qdrant_collection}")
+    info = client.get_collection(collection_name)
+    typer.echo(f"Collection: {collection_name}")
     typer.echo(f"Status:     {info.status}")
     typer.echo(f"Points:     {info.points_count}")
     vectors_config = info.config.params.vectors
@@ -83,10 +94,11 @@ def search(
     """Search indexed vault chunks by semantic similarity."""
     settings = get_settings()
     client = get_qdrant_client()
-    typer.echo(f"Searching '{settings.qdrant_collection}' for: \"{query}\"")
+    collection_name = collection_name_for_vault(settings.vault_path)
+    typer.echo(f"Searching '{collection_name}' for: \"{query}\"")
     results = search_chunks(
         client=client,
-        collection_name=settings.qdrant_collection,
+        collection_name=collection_name,
         query=query,
         top_k=top_k,
         score_threshold=threshold,

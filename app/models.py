@@ -1,6 +1,7 @@
 """Pydantic models defining Recall's public API contract."""
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +13,12 @@ class HealthResponse(BaseModel):
 
 class IngestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    vault_id: UUID
+
+
+class IngestFailure(BaseModel):
+    source_path: str
+    reason: str
 
 
 class IngestResponse(BaseModel):
@@ -19,6 +26,11 @@ class IngestResponse(BaseModel):
     files_found: int
     chunks_created: int = 0
     chunks_indexed: int = 0
+    files_indexed: int = 0
+    files_updated: int = 0
+    files_unchanged: int = 0
+    files_deleted: int = 0
+    failures: list[IngestFailure] = Field(default_factory=list)
     message: str
 
 
@@ -28,6 +40,12 @@ class VaultEntry(BaseModel):
 
 
 class VaultResponse(BaseModel):
+    entries: list[VaultEntry]
+
+
+class VaultSelectionResponse(BaseModel):
+    vault_id: UUID
+    name: str
     entries: list[VaultEntry]
 
 
@@ -49,6 +67,7 @@ class SearchResult(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, description="Natural language search query")
+    vault_id: UUID = Field(description="Selected vault to search")
     top_k: int = Field(default=5, ge=1, le=20, description="Maximum number of chunks to return")
     score_threshold: float | None = Field(
         default=None,
@@ -63,8 +82,15 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
 class ChatRequest(SearchRequest):
     """Input for generating an answer from retrieved vault chunks."""
+
+    history: list["ChatMessage"] = Field(default_factory=list, max_length=12)
 
 
 class ChatCitation(BaseModel):

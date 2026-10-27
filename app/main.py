@@ -1,13 +1,16 @@
 """FastAPI entrypoint for Recall."""
 
+import ipaddress
 import logging
 from time import perf_counter
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 
 from app.config import get_settings
 from app.generator import generate_answer
-from app.ingest import find_markdown_files, list_vault_entries, parse_vault_chunks
+from app.indexing import index_vault_incrementally
+from app.ingest import list_vault_entries
 from app.models import (
     ChatCitation,
     ChatRequest,
@@ -18,13 +21,16 @@ from app.models import (
     SearchRequest,
     SearchResponse,
     VaultResponse,
+    VaultSelectionResponse,
 )
 from app.prompt import (
     INSUFFICIENT_CONTEXT_ANSWER,
     build_rag_prompt,
     sort_results_sequentially,
 )
-from app.vectorstore import get_qdrant_client, index_chunks, search_chunks
+from app.vault_picker import choose_vault_directory
+from app.vault_session import collection_name_for_vault, vault_session
+from app.vectorstore import get_qdrant_client, search_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +58,49 @@ async def log_request_duration(request: Request, call_next):
         )
 
 
+def require_local_application(request: Request) -> None:
+    """Restrict folder selection and selected-vault operations to loopback clients."""
+    client = request.client
+    if client is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This operation is available only from the local Recall app.",
+        )
+    try:
+        if not ipaddress.ip_address(client.host).is_loopback:
+            raise HTTPException(
+                status_code=403,
+                detail="This operation is available only from the local Recall app.",
+            )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=403,
+            detail="This operation is available only from the local Recall app.",
+        ) from error
+
+    origin = request.headers.get("origin")
+    if origin:
+        try:
+            parsed_origin = urlsplit(origin)
+        except ValueError as error:
+            raise HTTPException(
+                status_code=403,
+                detail="This operation is available only from the local Recall app.",
+            ) from error
+        hostname = parsed_origin.hostname
+        is_local_origin = hostname == "localhost"
+        if hostname:
+            try:
+                is_local_origin = is_local_origin or ipaddress.ip_address(hostname).is_loopback
+            except ValueError:
+                pass
+        if parsed_origin.scheme not in {"http", "https"} or not is_local_origin:
+            raise HTTPException(
+                status_code=403,
+                detail="This operation is available only from the local Recall app.",
+            )
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Confirm that the API process is running."""
@@ -59,8 +108,9 @@ def health() -> HealthResponse:
 
 
 @app.get("/vault", response_model=VaultResponse)
-def get_vault() -> VaultResponse:
+def get_vault(request: Request) -> VaultResponse:
     """List folders and Markdown files in the configured vault."""
+    require_local_application(request)
     try:
         entries = list_vault_entries(get_settings().vault_path)
     except (FileNotFoundError, NotADirectoryError) as error:
@@ -72,27 +122,87 @@ def get_vault() -> VaultResponse:
     return VaultResponse(entries=entries)
 
 
-@app.post("/ingest", response_model=IngestResponse)
-def ingest_vault(request: IngestRequest) -> IngestResponse:
-    """Discover, chunk, and index Markdown notes into Qdrant."""
-    settings = get_settings()
-    vault_path = settings.vault_path
+@app.get("/vault/selection", response_model=VaultSelectionResponse)
+def get_vault_selection(request: Request) -> VaultSelectionResponse | Response:
+    """Return the active in-memory selection without exposing its absolute path."""
+    require_local_application(request)
+    selection = vault_session.current()
+    if selection is None:
+        return Response(status_code=204)
+    if vault_session.resolve(selection.vault_id) is None:
+        vault_session.clear()
+        return Response(status_code=204)
     try:
-        files = find_markdown_files(vault_path)
-        chunks = parse_vault_chunks(vault_path)
-    except (FileNotFoundError, NotADirectoryError) as error:
+        entries = list_vault_entries(selection.path)
+    except (OSError, ValueError) as error:
+        vault_session.clear()
+        raise HTTPException(
+            status_code=409,
+            detail="The selected vault is no longer available. Select it again.",
+        ) from error
+    return VaultSelectionResponse(vault_id=selection.vault_id, name=selection.name, entries=entries)
+
+
+@app.post("/vault/select", response_model=VaultSelectionResponse)
+def select_vault(request: Request) -> VaultSelectionResponse | Response:
+    """Open the local OS folder chooser and select a vault for this backend session."""
+    require_local_application(request)
+    try:
+        selected_path = choose_vault_directory()
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The native folder chooser is unavailable. Run Recall on the desktop "
+                "where the vault folder is stored."
+            ),
+        ) from error
+
+    if selected_path is None:
+        return Response(status_code=204)
+
+    try:
+        selection, entries = vault_session.select(selected_path)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except OSError as error:
         raise HTTPException(
             status_code=400,
-            detail="The configured vault path is missing or is not a directory.",
+            detail="The selected folder is unavailable or is not a readable directory.",
         ) from error
+
+    return VaultSelectionResponse(
+        vault_id=selection.vault_id,
+        name=selection.name,
+        entries=entries,
+    )
+
+
+@app.post("/ingest", response_model=IngestResponse)
+def ingest_vault(payload: IngestRequest, request: Request) -> IngestResponse:
+    """Discover, chunk, and index Markdown notes into Qdrant."""
+    require_local_application(request)
+    selection = vault_session.resolve(payload.vault_id)
+    if selection is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This vault selection is no longer active. Select the vault again.",
+        )
 
     try:
         client = get_qdrant_client()
-        chunks_indexed = index_chunks(
+        indexing = index_vault_incrementally(
             client=client,
-            collection_name=settings.qdrant_collection,
-            chunks=chunks,
+            collection_name=collection_name_for_vault(selection.path),
+            vault_path=selection.path,
         )
+    except (FileNotFoundError, NotADirectoryError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail="The selected vault path is missing or is not a directory.",
+        ) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except Exception as error:
         raise HTTPException(
             status_code=500,
@@ -100,29 +210,46 @@ def ingest_vault(request: IngestRequest) -> IngestResponse:
         ) from error
 
     return IngestResponse(
-        status="indexed",
-        files_found=len(files),
-        chunks_created=len(chunks),
-        chunks_indexed=chunks_indexed,
+        status="partial" if indexing.failures else "indexed",
+        files_found=indexing.files_found,
+        chunks_created=indexing.chunks_indexed,
+        chunks_indexed=indexing.chunks_indexed,
+        files_indexed=indexing.files_indexed,
+        files_updated=indexing.files_updated,
+        files_unchanged=indexing.files_unchanged,
+        files_deleted=indexing.files_deleted,
+        failures=[
+            {"source_path": failure.source_path, "reason": failure.reason}
+            for failure in indexing.failures
+        ],
         message=(
-            f"Discovered {len(files)} notes and indexed {chunks_indexed} "
-            f"chunks into Qdrant collection '{settings.qdrant_collection}'."
+            f"Discovered {indexing.files_found} notes: {indexing.files_indexed} new, "
+            f"{indexing.files_updated} updated, {indexing.files_unchanged} unchanged, "
+            f"{indexing.files_deleted} deleted; indexed {indexing.chunks_indexed} chunks, "
+            f"{len(indexing.failures)} failed for vault '{selection.name}'."
         ),
     )
 
 
 @app.post("/search", response_model=SearchResponse)
-def search_vault(request: SearchRequest) -> SearchResponse:
+def search_vault(payload: SearchRequest, request: Request) -> SearchResponse:
     """Search indexed Markdown chunks by semantic similarity."""
-    settings = get_settings()
+    require_local_application(request)
+    selection = vault_session.resolve(payload.vault_id)
+    if selection is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This vault selection is no longer active. Select the vault again.",
+        )
+    collection_name = collection_name_for_vault(selection.path)
     try:
         client = get_qdrant_client()
         results = search_chunks(
             client=client,
-            collection_name=settings.qdrant_collection,
-            query=request.query,
-            top_k=request.top_k,
-            score_threshold=request.score_threshold,
+            collection_name=collection_name,
+            query=payload.query,
+            top_k=payload.top_k,
+            score_threshold=payload.score_threshold,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -132,21 +259,32 @@ def search_vault(request: SearchRequest) -> SearchResponse:
             detail=f"Failed to query vectorstore: {error}",
         ) from error
 
-    return SearchResponse(query=request.query, results=results)
+    return SearchResponse(query=payload.query, results=results)
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat_with_vault(request: ChatRequest) -> ChatResponse:
+def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
     """Retrieve relevant notes and generate an answer with source references."""
-    settings = get_settings()
+    require_local_application(request)
+    selection = vault_session.resolve(payload.vault_id)
+    if selection is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This vault selection is no longer active. Select the vault again.",
+        )
+    collection_name = collection_name_for_vault(selection.path)
+    history = payload.history[-8:]
+    retrieval_query = "\n".join(
+        [*(f"{message.role}: {message.content}" for message in history), payload.query]
+    )
     try:
         client = get_qdrant_client()
         results = search_chunks(
             client=client,
-            collection_name=settings.qdrant_collection,
-            query=request.query,
-            top_k=request.top_k,
-            score_threshold=request.score_threshold,
+            collection_name=collection_name,
+            query=retrieval_query,
+            top_k=payload.top_k,
+            score_threshold=payload.score_threshold,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -160,7 +298,7 @@ def chat_with_vault(request: ChatRequest) -> ChatResponse:
         return ChatResponse(answer=INSUFFICIENT_CONTEXT_ANSWER, citations=[])
 
     ordered_results = sort_results_sequentially(results)
-    prompt = build_rag_prompt(request.query, ordered_results)
+    prompt = build_rag_prompt(payload.query, ordered_results, history=history)
 
     try:
         answer = generate_answer(prompt)

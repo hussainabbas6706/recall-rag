@@ -1,12 +1,16 @@
 """Prompt construction for grounded answer generation."""
 
-from app.models import SearchResult
+from collections.abc import Sequence
+
+from app.models import ChatMessage, SearchResult
 
 INSUFFICIENT_CONTEXT_ANSWER = "I don't have enough information to answer that."
 
 _SYSTEM_INSTRUCTION = (
     "You are a personal knowledge assistant. "
     "Answer the user's question using ONLY the context provided below. "
+    "Use the conversation history only to resolve references and follow-up questions; "
+    "do not treat prior assistant messages as factual sources. "
     "If the answer cannot be found in the context, say exactly: "
     f"\"{INSUFFICIENT_CONTEXT_ANSWER}\" "
     "Cite the sources you used by their reference numbers, e.g. [1] or [1][2]."
@@ -50,12 +54,17 @@ def _format_context_block(results: list[SearchResult]) -> str:
     return "\n".join(lines).strip()
 
 
-def build_rag_prompt(question: str, results: list[SearchResult]) -> str:
+def build_rag_prompt(
+    question: str,
+    results: list[SearchResult],
+    history: Sequence[ChatMessage] = (),
+) -> str:
     """Build a grounded RAG prompt from a question and retrieved chunks.
 
     Args:
         question: The user's natural language question.
         results: Ranked search results from Qdrant, ordered best-first.
+        history: Previous chat messages used to interpret follow-up questions.
 
     Returns:
         A formatted prompt string ready to send to the LLM.
@@ -72,11 +81,20 @@ def build_rag_prompt(question: str, results: list[SearchResult]) -> str:
         )
 
     context_block = _format_context_block(results)
+    history_block = "\n".join(
+        f"{message.role.title()}: {message.content}" for message in history
+    )
+    history_section = (
+        f"--- CONVERSATION HISTORY ---\n\n{history_block}\n\n"
+        if history_block
+        else ""
+    )
 
     return (
         f"{_SYSTEM_INSTRUCTION}\n\n"
         f"--- CONTEXT ---\n\n"
         f"{context_block}\n\n"
+        f"{history_section}"
         f"--- QUESTION ---\n\n"
         f"{clean_question}\n\n"
         f"--- ANSWER ---"

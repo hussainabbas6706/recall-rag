@@ -8,7 +8,7 @@ from time import perf_counter
 from qdrant_client import QdrantClient, models
 
 from app.config import get_settings
-from app.embeddings import embed_query, embed_texts
+from app.embeddings import EMBEDDING_DIMENSIONS, EmbeddingModel, embed_query, embed_texts
 from app.models import Chunk, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -23,20 +23,36 @@ def get_qdrant_client(url: str | None = None) -> QdrantClient:
 def ensure_collection_exists(
     client: QdrantClient,
     collection_name: str,
-    vector_size: int = 768,
+    vector_size: int | None = None,
 ) -> bool:
     """Ensure a Qdrant collection exists with Cosine distance and given vector size.
 
     Returns:
         bool: True if a new collection was created, False if it already existed.
     """
+    expected_size = EMBEDDING_DIMENSIONS
+    if vector_size is not None and vector_size != expected_size:
+        raise ValueError(
+            f"The active local embedding model requires {expected_size}-dimensional vectors."
+        )
     if client.collection_exists(collection_name=collection_name):
+        vectors_config = client.get_collection(collection_name).config.params.vectors
+        if (
+            not isinstance(vectors_config, models.VectorParams)
+            or vectors_config.size != expected_size
+            or vectors_config.distance != models.Distance.COSINE
+        ):
+            raise ValueError(
+                f"Qdrant collection '{collection_name}' is incompatible with the active "
+                f"embedding model; expected {expected_size}-dimensional cosine vectors. "
+                "Choose a new collection and re-index."
+            )
         return False
 
     client.create_collection(
         collection_name=collection_name,
         vectors_config=models.VectorParams(
-            size=vector_size,
+            size=expected_size,
             distance=models.Distance.COSINE,
         ),
     )
@@ -53,7 +69,7 @@ def index_chunks(
     collection_name: str,
     chunks: Sequence[Chunk],
     batch_size: int = 64,
-    embedding_model=None,
+    embedding_model: EmbeddingModel | None = None,
 ) -> int:
     """Embed chunks and index them into Qdrant in batches.
 
@@ -63,7 +79,6 @@ def index_chunks(
     if not chunks:
         return 0
 
-    settings = get_settings()
     collection_setup_seconds = 0.0
     embedding_seconds = 0.0
     qdrant_write_seconds = 0.0
@@ -73,7 +88,7 @@ def index_chunks(
         ensure_collection_exists(
             client=client,
             collection_name=collection_name,
-            vector_size=settings.embedding_dimensions,
+            vector_size=EMBEDDING_DIMENSIONS,
         )
         collection_setup_seconds = perf_counter() - setup_started
 
@@ -125,7 +140,7 @@ def search_chunks(
     query: str,
     top_k: int = 5,
     score_threshold: float | None = None,
-    embedding_model=None,
+    embedding_model: EmbeddingModel | None = None,
 ) -> list[SearchResult]:
     """Search for relevant chunks in Qdrant matching the query text.
 
@@ -135,7 +150,7 @@ def search_chunks(
         query: User's natural language search text.
         top_k: Maximum number of closest points to return.
         score_threshold: Optional minimum cosine similarity cutoff.
-        embedding_model: Optional GoogleGenerativeAIEmbeddings instance (for testing).
+        embedding_model: Optional local embedding provider (for testing).
 
     Returns:
         list[SearchResult]: Ranked matching chunks with similarity scores.

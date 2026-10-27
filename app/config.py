@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, repr=False)
     vault_path: Path = Path("tests/fixtures/vault")
     qdrant_url: HttpUrl = "http://localhost:6333"
-    qdrant_collection: str = "recall_chunks"
-    embedding_model: str = "gemini-embedding-2"
-    embedding_dimensions: int = Field(default=768, ge=128, le=3072)
+    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_batch_size: int = Field(default=16, ge=1, le=16)
+    local_embedding_collection_prefix: str = "recall_local"
     answer_model: str = "gemini-3.8-flash"
     top_k: int = Field(default=5, ge=1, le=20)
 

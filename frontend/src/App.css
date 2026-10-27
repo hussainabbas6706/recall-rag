@@ -92,47 +92,69 @@
   color: #356d48;
 }
 
+.feedback-warning {
+  color: #8a5a16;
+}
+
 .feedback-success p {
   margin: 10px 0 0;
 }
 
-.chat-result {
+.ingestion-failures {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.chat-transcript {
   margin-top: 26px;
   border-top: 1px solid var(--line);
 }
 
-.submitted-question,
-.answer-block,
-.citations {
+.chat-turn {
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
 }
 
-.submitted-question > p:last-child {
+.chat-turn-user {
+  padding-left: 14px;
+  border-left: 2px solid var(--line);
+}
+
+.chat-question-text {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.6;
 }
 
+.chat-turn-assistant .eyebrow,
+.chat-turn-user .eyebrow {
+  margin-bottom: 8px;
+}
+
 .answer-text {
-  margin: 0;
+  margin: 0 0 14px;
   color: var(--ink);
   font-family: var(--serif);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
 
 .citations h3 {
-  margin: 0 0 12px;
-  color: var(--ink);
-  font-size: 13px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .citation-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -158,9 +180,56 @@
   gap: 2px;
 }
 
+.citation-link {
+  display: grid;
+  gap: 2px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.55;
+  text-decoration: none;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+}
+
 .citation-heading {
   color: var(--muted);
   font-size: 11px;
+}
+
+.vault-file {
+  display: inline-block;
+  scroll-margin-top: 18px;
+}
+
+.vault-file:target {
+  border-radius: 4px;
+  outline: 2px solid #d3dfd5;
+  background: #edf2ee;
+}
+
+.vault-connection {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 16px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vault-connection .status-indicator {
+  flex: 0 0 auto;
+  background: #43835a;
+}
+
+.chat-form {
+  margin-top: 18px;
+}
+
+.chat-transcript .panel-note {
+  margin: 18px 0;
 }
 
 .welcome {
@@ -268,6 +337,10 @@
 .vault-tree summary {
   cursor: pointer;
   font-weight: 600;
+}
+
+.citation-list li:target {
+  background: var(--accent-wash);
 }
 
 .panel-heading {

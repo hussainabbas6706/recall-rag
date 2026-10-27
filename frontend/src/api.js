@@ -34,6 +34,45 @@ export async function getVault({ signal } = {}) {
   return data.entries
 }
 
+export async function getVaultSelection({ signal } = {}) {
+  const response = await fetch(`${API_BASE_URL}/vault/selection`, { signal })
+  if (response.status === 204) {
+    return null
+  }
+  const data = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(data?.detail || `Vault status failed with HTTP ${response.status}.`)
+  }
+  if (
+    typeof data.vault_id !== 'string'
+    || typeof data.name !== 'string'
+    || !Array.isArray(data.entries)
+  ) {
+    throw new Error('The API returned an unexpected vault selection.')
+  }
+  return data
+}
+
+export async function selectVaultFolder() {
+  const response = await fetch(`${API_BASE_URL}/vault/select`, { method: 'POST' })
+  if (response.status === 204) {
+    return null
+  }
+  const data = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(data?.detail || `Folder selection failed with HTTP ${response.status}.`)
+  }
+  return data
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json()
+  } catch {
+    throw new Error(`The API returned an unreadable response (HTTP ${response.status}).`)
+  }
+}
+
 async function postJson(path, payload) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
@@ -59,10 +98,10 @@ async function postJson(path, payload) {
   return data
 }
 
-export function ingestVault() {
-  return postJson('/ingest', {})
+export function ingestVault(vaultId) {
+  return postJson('/ingest', { vault_id: vaultId })
 }
 
-export function chatWithRecall(query) {
-  return postJson('/chat', { query })
+export function chatWithRecall(vaultId, query, history) {
+  return postJson('/chat', { vault_id: vaultId, query, history })
 }
