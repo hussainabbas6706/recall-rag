@@ -1,18 +1,99 @@
 [
   {
-    "query": "Which companies are job-application targets?",
-    "expected_source": "career/job-applications.md"
+    "query": "What is in the 'Launch checklist' section of `WEEKLY GOALS.md`?",
+    "query_type": "explicit_file_heading",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "WEEKLY GOALS.md", "heading": "Launch checklist"}
   },
   {
-    "query": "What library does Atlas use for its research workflow?",
-    "expected_source": "projects/atlas.md"
+    "query": "List the steps under the 'Weekly rhythm' section in `notes/🗓️ WEEKLY GOALS.md`.",
+    "query_type": "explicit_file_heading",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "notes/🗓️ WEEKLY GOALS.md", "heading": "Weekly rhythm"}
   },
   {
-    "query": "What does Recall retrieve and answer with?",
-    "expected_source": "projects/recall.md"
+    "query": "What should the team do before the next review?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md", "notes/daily-routine.md"]
   },
   {
-    "query": "What should happen before the code freeze?",
-    "expected_source": "projects/recall.md"
+    "query": "Which morning tasks are tracked in the daily routine?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/daily-routine.md"]
+  },
+  {
+    "query": "What milestones are the project team tracking?",
+    "query_type": "paraphrased",
+    "expected_sources": ["notes/master-timeline.md"]
+  },
+  {
+    "query": "What are the main project decisions and risks?",
+    "query_type": "multi_note",
+    "expected_sources": ["notes/project-plan.md"]
+  },
+  {
+    "query": "Which steps are part of the launch plan?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md", "notes/project-plan.md"]
+  },
+  {
+    "query": "Summarize the release timeline and final review plan.",
+    "query_type": "multi_note",
+    "expected_sources": ["notes/master-timeline.md", "notes/project-plan.md"]
+  },
+  {
+    "query": "What is the 'Morning review' section in `daily-routine.md`?",
+    "query_type": "explicit_file_heading",
+    "expected_sources": ["notes/daily-routine.md"],
+    "expected_target": {"file": "daily-routine.md", "heading": "Morning review"}
+  },
+  {
+    "query": "Which tasks are due before Friday?",
+    "query_type": "paraphrased",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"]
+  },
+  {
+    "query": "What is in the 'Launch checklist' section of `MISSING.md`?",
+    "query_type": "missing_filename",
+    "expected_sources": [],
+    "expected_target": null
+  },
+  {
+    "query": "List the steps under the 'Missing section' heading in `WEEKLY GOALS.md`.",
+    "query_type": "missing_heading",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "WEEKLY GOALS.md", "heading": "Missing section"}
+  },
+  {
+    "query": "Compare the 'Launch checklist' section in `WEEKLY GOALS.md` with the same heading in a different note.",
+    "query_type": "ambiguous_reference",
+    "expected_sources": [],
+    "expected_target": null
+  },
+  {
+    "query": "What are the exact historical notes for the old launch plan?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/archive/old-plan.md"]
+  },
+  {
+    "query": "What is the current uptime of the release service?",
+    "query_type": "answer_absent",
+    "expected_sources": []
+  },
+  {
+    "query": "What does the 'Decision log' section in `project-plan.md` say?",
+    "query_type": "explicit_file_heading",
+    "expected_sources": ["notes/project-plan.md"],
+    "expected_target": {"file": "project-plan.md", "heading": "Decision log"}
+  },
+  {
+    "query": "What follow-ups exist after the final review?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/master-timeline.md", "notes/daily-routine.md"]
+  },
+  {
+    "query": "Summarize the current project status and upcoming review steps.",
+    "query_type": "multi_note",
+    "expected_sources": ["notes/project-plan.md", "notes/master-timeline.md"]
   }
 ]
