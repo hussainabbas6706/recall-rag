@@ -28,6 +28,12 @@ from app.prompt import (
     build_rag_prompt,
     sort_results_sequentially,
 )
+from app.scoped_retrieval import (
+    MAX_SCOPED_CONTEXT_CHARS,
+    merge_scoped_and_semantic_results,
+    parse_explicit_reference,
+    retrieve_heading_scoped_chunks,
+)
 from app.vault_picker import choose_vault_directory
 from app.vault_session import collection_name_for_vault, vault_session
 from app.vectorstore import get_qdrant_client, search_chunks
@@ -277,15 +283,50 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
     retrieval_query = "\n".join(
         [*(f"{message.role}: {message.content}" for message in history), payload.query]
     )
+    context_note = None
     try:
         client = get_qdrant_client()
-        results = search_chunks(
+        semantic_results = search_chunks(
             client=client,
             collection_name=collection_name,
             query=retrieval_query,
             top_k=payload.top_k,
             score_threshold=payload.score_threshold,
         )
+        explicit_reference = parse_explicit_reference(payload.query)
+        if explicit_reference is None:
+            results = semantic_results
+        else:
+            file_reference, heading_reference = explicit_reference
+            scoped_results = retrieve_heading_scoped_chunks(
+                client=client,
+                collection_name=collection_name,
+                file_reference=file_reference,
+                heading_reference=heading_reference,
+            )
+            if scoped_results and sum(
+                len(result.chunk.content) for result in scoped_results
+            ) > MAX_SCOPED_CONTEXT_CHARS:
+                context_note = (
+                    "Only part of the explicitly requested section fit in the context. "
+                    "Do not claim the section is complete or infer omitted content."
+                )
+            elif not scoped_results:
+                context_note = (
+                    "The explicitly named file and heading could not be resolved uniquely "
+                    "in the index. Do not present other sources as that target; explain "
+                    "that the requested target could not be identified unless the context "
+                    "itself clearly establishes it."
+                )
+            results = (
+                merge_scoped_and_semantic_results(
+                    semantic_results,
+                    scoped_results,
+                    max_context_chars=MAX_SCOPED_CONTEXT_CHARS,
+                )
+                if scoped_results
+                else semantic_results
+            )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:
@@ -298,7 +339,12 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
         return ChatResponse(answer=INSUFFICIENT_CONTEXT_ANSWER, citations=[])
 
     ordered_results = sort_results_sequentially(results)
-    prompt = build_rag_prompt(payload.query, ordered_results, history=history)
+    prompt = build_rag_prompt(
+        payload.query,
+        ordered_results,
+        history=history,
+        context_note=context_note,
+    )
 
     try:
         answer = generate_answer(prompt)

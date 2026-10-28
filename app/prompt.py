@@ -58,6 +58,7 @@ def build_rag_prompt(
     question: str,
     results: list[SearchResult],
     history: Sequence[ChatMessage] = (),
+    context_note: str | None = None,
 ) -> str:
     """Build a grounded RAG prompt from a question and retrieved chunks.
 
@@ -65,6 +66,7 @@ def build_rag_prompt(
         question: The user's natural language question.
         results: Ranked search results from Qdrant, ordered best-first.
         history: Previous chat messages used to interpret follow-up questions.
+        context_note: Optional retrieval limitation to disclose to the model.
 
     Returns:
         A formatted prompt string ready to send to the LLM.
@@ -89,11 +91,17 @@ def build_rag_prompt(
         if history_block
         else ""
     )
+    context_note_section = (
+        f"--- RETRIEVAL NOTE ---\n\n{context_note.strip()}\n\n"
+        if context_note and context_note.strip()
+        else ""
+    )
 
     return (
         f"{_SYSTEM_INSTRUCTION}\n\n"
         f"--- CONTEXT ---\n\n"
         f"{context_block}\n\n"
+        f"{context_note_section}"
         f"{history_section}"
         f"--- QUESTION ---\n\n"
         f"{clean_question}\n\n"
