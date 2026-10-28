@@ -112,6 +112,17 @@ def _scroll_records(
             return records
 
 
+def _strip_leading_decoration(value: str) -> str:
+    """Remove only leading non-word decoration from a filename.
+
+    This allows a note like `🗓️ WEEKLY GOALS.md` to match a user query for
+    `WEEKLY GOALS.md` without stripping meaningful characters from the actual
+    name itself.
+    """
+    cleaned = value.strip()
+    return re.sub(r"^[^\w]+", "", cleaned)
+
+
 def _resolve_source_path(
     client: QdrantClient,
     collection_name: str,
@@ -137,8 +148,16 @@ def _resolve_source_path(
         ]
     else:
         requested_name = PurePosixPath(normalized_reference).name.casefold()
+        requested_decoration_stripped = _strip_leading_decoration(requested_name)
         matches = [
-            path for path in source_paths if PurePosixPath(path).name.casefold() == requested_name
+            path
+            for path in source_paths
+            if PurePosixPath(path).name.casefold() == requested_name
+            or (
+                requested_decoration_stripped
+                and _strip_leading_decoration(PurePosixPath(path).name.casefold())
+                == requested_decoration_stripped
+            )
         ]
     return matches[0] if len(matches) == 1 else None
 

@@ -124,6 +124,50 @@ def test_scoped_retrieval_includes_nested_chunks_not_siblings_or_other_notes() -
     ]
 
 
+def test_scoped_retrieval_resolves_unique_decorated_filename() -> None:
+    qdrant = QdrantClient(":memory:")
+    ensure_collection_exists(qdrant, COLLECTION)
+    qdrant.upsert(
+        collection_name=COLLECTION,
+        points=[
+            models.PointStruct(
+                id=str(uuid4()),
+                vector=[1.0] + [0.0] * 383,
+                payload={
+                    "source_path": "notes/🗓️ WEEKLY GOALS.md",
+                    "heading_path": [PARENT],
+                    "chunk_index": 0,
+                    "content": "Update this every Sunday.",
+                },
+            ),
+            models.PointStruct(
+                id=str(uuid4()),
+                vector=[1.0] + [0.0] * 383,
+                payload={
+                    "source_path": "notes/🗓️ WEEKLY GOALS.md",
+                    "heading_path": [PARENT, "Week 1"],
+                    "chunk_index": 1,
+                    "content": "Week 1 goal: finish the first lesson.",
+                },
+            ),
+        ],
+        wait=True,
+    )
+
+    results = retrieve_heading_scoped_chunks(
+        qdrant,
+        COLLECTION,
+        "WEEKLY GOALS.md",
+        "Check off as you go",
+    )
+
+    assert results is not None
+    assert [(result.chunk.source_path, result.chunk.chunk_index) for result in results] == [
+        ("notes/🗓️ WEEKLY GOALS.md", 0),
+        ("notes/🗓️ WEEKLY GOALS.md", 1),
+    ]
+
+
 def test_scoped_retrieval_does_not_guess_missing_or_ambiguous_targets() -> None:
     qdrant = _indexed_collection()
     qdrant.upsert(
@@ -152,6 +196,44 @@ def test_scoped_retrieval_does_not_guess_missing_or_ambiguous_targets() -> None:
     assert (
         retrieve_heading_scoped_chunks(
             qdrant, COLLECTION, "notes/WEEKLY GOALS.md", "No such heading"
+        )
+        is None
+    )
+
+    qdrant_with_decorated_duplicate = QdrantClient(":memory:")
+    ensure_collection_exists(qdrant_with_decorated_duplicate, COLLECTION)
+    qdrant_with_decorated_duplicate.upsert(
+        collection_name=COLLECTION,
+        points=[
+            models.PointStruct(
+                id=str(uuid4()),
+                vector=[1.0] + [0.0] * 383,
+                payload={
+                    "source_path": "notes/WEEKLY GOALS.md",
+                    "heading_path": [PARENT],
+                    "chunk_index": 0,
+                    "content": "Undecorated copy.",
+                },
+            ),
+            models.PointStruct(
+                id=str(uuid4()),
+                vector=[1.0] + [0.0] * 383,
+                payload={
+                    "source_path": "notes/🗓️ WEEKLY GOALS.md",
+                    "heading_path": [PARENT],
+                    "chunk_index": 0,
+                    "content": "Decorated copy.",
+                },
+            ),
+        ],
+        wait=True,
+    )
+    assert (
+        retrieve_heading_scoped_chunks(
+            qdrant_with_decorated_duplicate,
+            COLLECTION,
+            "WEEKLY GOALS.md",
+            "Check off as you go",
         )
         is None
     )
