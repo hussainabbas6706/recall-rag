@@ -38,6 +38,7 @@ from app.vault_session import collection_name_for_vault, vault_session
 from app.vectorstore import get_qdrant_client, search_chunks
 
 logger = logging.getLogger(__name__)
+logging.getLogger("app").setLevel(logging.INFO)
 EXPLICIT_TARGET_UNRESOLVED_ANSWER = (
     "I couldn't find that source in the indexed notes or it could not be resolved uniquely. "
     "Please check the filename and heading."
@@ -350,6 +351,9 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
             status_code=500,
             detail=f"Failed to generate answer: {error}",
         ) from error
+
+    if INSUFFICIENT_CONTEXT_ANSWER in answer:
+        return ChatResponse(answer=INSUFFICIENT_CONTEXT_ANSWER, citations=[])
 
     citations = [
         ChatCitation(

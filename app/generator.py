@@ -27,6 +27,7 @@ def get_chat_model(api_key: str | None = None) -> BaseChatModel:
         model=model_name,
         google_api_key=key,
         temperature=0.0,
+        max_retries=2,
     )
 
 

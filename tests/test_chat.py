@@ -230,3 +230,25 @@ def test_chat_rejects_a_vault_id_from_an_old_selection(selected_fixture_vault) -
 
     assert response.status_code == 409
     search.assert_not_called()
+
+
+def test_chat_endpoint_returns_no_citations_when_llm_has_insufficient_context(selected_fixture_vault) -> None:
+    results = [_search_result('notes/a.md', ['A'], 'Irrelevant content.', 0.2, 0)]
+    with (
+        patch('app.main.search_chunks', return_value=results),
+        patch('app.main.generate_answer', return_value='I don\'t have enough information to answer that.') as generate,
+    ):
+        response = client.post(
+            '/chat',
+            json={
+                'query': 'A question that context cannot answer',
+                'vault_id': str(selected_fixture_vault.vault_id),
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'answer': 'I don\'t have enough information to answer that.',
+        'citations': [],
+    }
+    generate.assert_called_once()

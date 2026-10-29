@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_batch_size: int = Field(default=16, ge=1, le=16)
     local_embedding_collection_prefix: str = "recall_local"
-    answer_model: str = "gemini-3.8-flash"
+    answer_model: str = "gemini-3.5-flash"
     top_k: int = Field(default=5, ge=1, le=20)
 
 
