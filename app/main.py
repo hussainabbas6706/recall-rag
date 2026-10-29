@@ -30,7 +30,6 @@ from app.prompt import (
 )
 from app.scoped_retrieval import (
     MAX_SCOPED_CONTEXT_CHARS,
-    merge_scoped_and_semantic_results,
     parse_explicit_reference,
     retrieve_heading_scoped_chunks,
 )
@@ -39,6 +38,10 @@ from app.vault_session import collection_name_for_vault, vault_session
 from app.vectorstore import get_qdrant_client, search_chunks
 
 logger = logging.getLogger(__name__)
+EXPLICIT_TARGET_UNRESOLVED_ANSWER = (
+    "I couldn't find that source in the indexed notes or it could not be resolved uniquely. "
+    "Please check the filename and heading."
+)
 
 app = FastAPI(
     title="Recall",
@@ -304,29 +307,23 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
                 file_reference=file_reference,
                 heading_reference=heading_reference,
             )
-            if scoped_results and sum(
-                len(result.chunk.content) for result in scoped_results
-            ) > MAX_SCOPED_CONTEXT_CHARS:
-                context_note = (
-                    "Only part of the explicitly requested section fit in the context. "
-                    "Do not claim the section is complete or infer omitted content."
-                )
-            elif not scoped_results:
+            if scoped_results is None:
                 context_note = (
                     "The explicitly named file and heading could not be resolved uniquely "
                     "in the index. Do not present other sources as that target; explain "
                     "that the requested target could not be identified unless the context "
                     "itself clearly establishes it."
                 )
-            results = (
-                merge_scoped_and_semantic_results(
-                    semantic_results,
-                    scoped_results,
-                    max_context_chars=MAX_SCOPED_CONTEXT_CHARS,
+                return ChatResponse(
+                    answer=EXPLICIT_TARGET_UNRESOLVED_ANSWER,
+                    citations=[],
                 )
-                if scoped_results
-                else semantic_results
-            )
+            if sum(len(result.chunk.content) for result in scoped_results) > MAX_SCOPED_CONTEXT_CHARS:
+                context_note = (
+                    "Only part of the explicitly requested section fit in the context. "
+                    "Do not claim the section is complete or infer omitted content."
+                )
+            results = scoped_results
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:

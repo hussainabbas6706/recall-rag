@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from qdrant_client import QdrantClient, models
 
-from app.main import app
+from app.main import EXPLICIT_TARGET_UNRESOLVED_ANSWER, app
 from app.models import Chunk, SearchResult
 from app.scoped_retrieval import (
     MAX_SCOPED_CONTEXT_CHARS,
@@ -352,14 +352,14 @@ def test_chat_uses_scoped_evidence_and_cites_exact_context(selected_fixture_vaul
         assert context_line in prompt
 
 
-def test_chat_discloses_when_explicit_target_cannot_be_resolved(selected_fixture_vault) -> None:
+def test_chat_rejects_missing_explicit_target_without_fallback(selected_fixture_vault) -> None:
     qdrant = _indexed_collection()
     semantic = [_result("notes/DAILY ROUTINE.md", ["Sunday"], 0, "Sunday routine.")]
     with (
         patch("app.main.get_qdrant_client", return_value=qdrant),
         patch("app.main.collection_name_for_vault", return_value=COLLECTION),
         patch("app.main.search_chunks", return_value=semantic),
-        patch("app.main.generate_answer", return_value="The target was not identified.") as generate,
+        patch("app.main.generate_answer") as generate,
     ):
         response = client.post(
             "/chat",
@@ -370,17 +370,86 @@ def test_chat_discloses_when_explicit_target_cannot_be_resolved(selected_fixture
         )
 
     assert response.status_code == 200
-    prompt = generate.call_args.args[0]
-    assert "could not be resolved uniquely" in prompt
-    assert "Do not present other sources as that target" in prompt
-    assert "Sunday routine." in prompt
-    assert response.json()["citations"] == [
-        {
-            "reference": 1,
-            "source_path": "notes/DAILY ROUTINE.md",
-            "heading_path": ["Sunday"],
-        }
-    ]
+    assert response.json() == {
+        "answer": EXPLICIT_TARGET_UNRESOLVED_ANSWER,
+        "citations": [],
+    }
+    generate.assert_not_called()
+
+
+def test_chat_rejects_missing_explicit_filename_without_fallback(selected_fixture_vault) -> None:
+    qdrant = _indexed_collection()
+    semantic = [_result("notes/DAILY ROUTINE.md", ["Sunday"], 0, "Sunday routine.")]
+    with (
+        patch("app.main.get_qdrant_client", return_value=qdrant),
+        patch("app.main.collection_name_for_vault", return_value=COLLECTION),
+        patch("app.main.search_chunks", return_value=semantic),
+        patch("app.main.generate_answer") as generate,
+    ):
+        response = client.post(
+            "/chat",
+            json={
+                "query": "What is in the 'Launch checklist' section of `MISSING.md`?",
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": EXPLICIT_TARGET_UNRESOLVED_ANSWER,
+        "citations": [],
+    }
+    generate.assert_not_called()
+
+
+def test_chat_treats_ambiguous_reference_as_unresolved_explicit_target(selected_fixture_vault) -> None:
+    qdrant = _indexed_collection()
+    semantic = [_result("notes/DAILY ROUTINE.md", ["Sunday"], 0, "Sunday routine.")]
+    with (
+        patch("app.main.get_qdrant_client", return_value=qdrant),
+        patch("app.main.collection_name_for_vault", return_value=COLLECTION),
+        patch("app.main.search_chunks", return_value=semantic),
+        patch("app.main.generate_answer") as generate,
+    ):
+        response = client.post(
+            "/chat",
+            json={
+                "query": (
+                    "Compare the 'Launch checklist' section in `WEEKLY GOALS.md` "
+                    "with the same heading in a different note."
+                ),
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": EXPLICIT_TARGET_UNRESOLVED_ANSWER,
+        "citations": [],
+    }
+    generate.assert_not_called()
+
+
+def test_ordinary_no_results_stays_generic(selected_fixture_vault) -> None:
+    semantic = []
+    with (
+        patch("app.main.search_chunks", return_value=semantic),
+        patch("app.main.generate_answer") as generate,
+    ):
+        response = client.post(
+            "/chat",
+            json={
+                "query": "Tell me about a completely unrelated concept that is not in the notes.",
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "I don't have enough information to answer that.",
+        "citations": [],
+    }
+    generate.assert_not_called()
 
 
 def test_ordinary_chat_keeps_semantic_results(selected_fixture_vault) -> None:
