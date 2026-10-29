@@ -7,13 +7,19 @@ from app.models import ChatMessage, SearchResult
 INSUFFICIENT_CONTEXT_ANSWER = "I don't have enough information to answer that."
 
 _SYSTEM_INSTRUCTION = (
-    "You are a personal knowledge assistant. "
-    "Answer the user's question using ONLY the context provided below. "
-    "Use the conversation history only to resolve references and follow-up questions; "
+    "You are a personal knowledge assistant grounded in the user's notes. "
+    "The context below contains retrieved excerpts from the user's vault. "
+    "Use this context as your primary source of truth for vault-specific facts "
+    "(dates, tasks, goals, names, schedules, and other concrete details). "
+    "When the user asks a question that relates to topics covered in the context, "
+    "you may reason, give opinions, and draw on general knowledge to provide a helpful answer — "
+    "but always anchor your response in the context and cite the sources you used "
+    "by their reference numbers, e.g. [1] or [1][2]. "
+    "Use the conversation history to resolve references and follow-up questions; "
     "do not treat prior assistant messages as factual sources. "
-    "If the answer cannot be found in the context, say exactly: "
+    "If the question is completely unrelated to anything in the provided context, say exactly: "
     f"\"{INSUFFICIENT_CONTEXT_ANSWER}\" "
-    "Cite the sources you used by their reference numbers, e.g. [1] or [1][2]."
+    "Do not invent vault-specific facts that are not in the context."
 )
 
 

@@ -1,10 +1,10 @@
 AGENTS.md — Recall
 Project purpose
-Recall (recall-rag) is a learning-focused naive RAG assistant that indexes an Obsidian Markdown vault, retrieves relevant notes using Qdrant, and answers questions with source-file and heading-level citations.
+Recall (recall-rag) is a learning-focused RAG assistant that indexes an Obsidian Markdown vault, retrieves relevant notes using Qdrant, and answers questions with source-file and heading-level citations. The project is actively being upgraded from naive RAG to Advanced RAG (cross-encoder reranking, hybrid search, citation verification) as a portfolio showcase.
 
 The developer is learning AI engineering while building this project. Optimize for understanding, correctness, and maintainability, not maximum code generation speed. Recall is a learning and portfolio project, not a claim of production readiness.
 How to work with the developer
-Act as a programming mentor and pair programmer—not just a code generator.
+Act as a programming mentor and pair programmer—not just a code generator. The developer is in flow state and making steady progress. Match that energy: stay focused, keep momentum, and avoid unnecessary hand-holding on concepts already understood.
 
 For each milestone:
 
@@ -41,40 +41,52 @@ For each milestone:
 - Report the exact commands/checks run, results, blockers, and remaining limitations honestly.
 - Do not call paid LLM APIs or access the real vault during tests unless explicitly approved.
   Current project status and roadmap
-  Recall already has an end-to-end naive RAG pipeline: Markdown ingestion and heading-aware chunking, embeddings and Qdrant storage, retrieval, Gemini answer generation, source/heading metadata, a FastAPI backend, and a React frontend. Local embeddings using sentence-transformers/all-MiniLM-L6-v2 are being used to avoid relying on Gemini embedding quota; Gemini remains the answer-generation provider.
+  Recall has an end-to-end RAG pipeline: Markdown ingestion with heading-aware chunking, local embeddings (sentence-transformers/all-MiniLM-L6-v2) and Qdrant vector storage, semantic retrieval, scoped retrieval (explicit file and heading references bypass vector search), Gemini answer generation (gemini-3.5-flash, max_retries=2), source/heading metadata, a FastAPI backend, and a React (Vite) frontend.
 
-Do not assume every item above is currently correct or fully reliable. Inspect the current implementation and tests before changing it. The current priority is retrieval quality and grounded answers, not adding features or optimizing latency prematurely.
+What has been completed so far:
+- Diagnosis and baseline inspection of the full codebase.
+- Latency fix: identified Gemini 503 retry loops causing 5+ minute response times; switched to gemini-3.5-flash with max_retries=2, bringing response time to ~3.4s.
+- False citation fix: when the LLM returns INSUFFICIENT_CONTEXT_ANSWER, citations are now returned as an empty list instead of incorrectly attributing sources.
+- Scoped retrieval fixes: whole-file queries (e.g. asking about a specific .md file) now deterministically fetch all chunks of that file in reading order instead of falling back to vector search. Improved filename extraction regex to handle unquoted filenames and leading articles.
+- Optimized intent routing: explicit file/heading references are evaluated before vector search, skipping unnecessary embedding and semantic search entirely.
+- Raised ChatMessage.content max_length from 2000 to 20000 so long assistant responses can be passed back in conversation history.
+- Full test suite: 118 passed, 2 skipped (Windows symlink tests). Ruff linter: all checks passed.
+
+Known limitation observed: dense-only retrieval misses brief keyword mentions (e.g. a short "code freeze" reference buried in a larger chunk ranks outside top-k because the chunk's overall embedding is dominated by other topics). This is the classic weakness that hybrid search (dense + sparse/BM25) addresses.
+
+Do not assume every item above is currently correct or fully reliable. Inspect the current implementation and tests before changing it.
 Agreed retrieval-quality roadmap
 Work through these milestones in order, one at a time. Do not skip ahead or implement the entire roadmap in one pass.
 
-1. Read-only diagnosis and baseline
-   - Inspect current Git status/diff and relevant retrieval, chunking, prompting, citation, and test code.
-   - Review the existing scoped-retrieval implementation and preserve it; do not rewrite it from scratch.
-   - Reproduce known issues using synthetic/in-memory fixtures only.
-   - Confirm the known mismatch where a user mentions WEEKLY GOALS.md but the indexed filename is decorated, e.g. 🗓️ WEEKLY GOALS.md.
-   - Inspect how scoped results are merged with semantic results and how citations are constructed.
-   - Identify what is known versus still uncertain. Do not edit code in this milestone.
-   - Report the smallest proposed fix and test plan, then wait for approval before implementation.
-2. Fix known file/heading resolution bugs
-   - Resolve a requested filename against indexed source paths robustly, including decorative emoji/prefix differences where the match is unique.
-   - Preserve ambiguity safety: never silently select one of multiple plausible files.
-   - Preserve correct path handling and avoid broad fuzzy matching that could resolve to the wrong note.
-   - Test exact names, decorated names, missing names, and ambiguous candidates.
-   - Keep heading-reference parsing and nested section retrieval working, including Unicode and curly/straight quotes.
-   - Make only the smallest approved changes; inspect the diff and run focused tests before reporting.
+1. ✅ COMPLETE — Read-only diagnosis and baseline
+   - Inspected full codebase: retrieval, chunking, prompting, citation, and test code.
+   - Reviewed scoped-retrieval implementation.
+   - Identified file/heading resolution bugs and latency issues.
+   - Reported findings and proposed fixes with test plans.
+2. ✅ COMPLETE — Fix known file/heading resolution bugs
+   - Resolved whole-file queries: parse_explicit_reference supports (file, None).
+   - Fixed filename extraction regex for unquoted filenames and leading articles.
+   - Preserved ambiguity safety: multiple plausible files still rejected.
+   - Added unit and integration tests covering whole-file scoped retrieval.
+   - Fixed Gemini model/retry latency and false citation attribution.
+   - All tests passing (118 passed, 2 skipped).
 3. Create a repeatable retrieval evaluation set
    - Use synthetic Markdown notes, not the real vault, to create approximately 15–30 representative questions with expected source files/chunks.
    - Cover explicit filename and heading references, natural/implicit references, paraphrased wording, multi-chunk or multi-note questions, ambiguous/missing references, and unanswerable questions.
+   - Include keyword-specific queries (like the observed "code freeze" case) to measure dense-only retrieval gaps.
    - Measure whether expected evidence appears in the retrieved results (for example Recall@k), ranking quality where practical, and irrelevant-context inclusion.
    - Establish and record a baseline before changing retrieval strategy.
    - Keep evaluation deterministic and affordable; do not require Gemini calls for basic retrieval metrics.
-4. Improve the existing retrieval pipeline
-   - Use evaluation results to investigate ranking, chunk boundaries, parent/child section expansion, retrieval limits, metadata filters, deduplication, and context selection.
-   - Preserve the local embedding model and current Qdrant collection initially; do not mix model changes, re-indexing, chunking changes, and retrieval-strategy changes in one experiment.
+4. Improve the existing retrieval pipeline — Two-Stage Retrieval with Cross-Encoder Reranking
+   - Over-fetch top k=15 candidate chunks from Qdrant using MiniLM bi-encoder vector search.
+   - Add a lightweight cross-encoder model (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2, ~80MB, fast on CPU) to rerank candidates by true cross-attention relevance.
+   - Pass only the top reranked chunks to Gemini as context.
+   - Preserve the local embedding model and current Qdrant collection; do not mix model changes, re-indexing, chunking changes, and retrieval-strategy changes in one experiment.
    - Do not assume every query should use scoped retrieval. Natural-language questions without explicit references must still work through general retrieval.
-   - Keep changes small and compare against the baseline.
-5. Evaluate hybrid search as a controlled experiment
-   - Only after the baseline and known bugs are addressed, compare current dense retrieval with dense + sparse retrieval using Qdrant and Reciprocal Rank Fusion (RRF), if evaluation indicates a need.
+   - Measure improvement against the evaluation baseline. Keep changes small and compare.
+5. Evaluate hybrid search as a controlled experiment — Dense + Sparse with RRF
+   - Only after reranking is in place and baselined, compare current dense retrieval with dense + sparse retrieval using Qdrant and Reciprocal Rank Fusion (RRF).
+   - This directly addresses the observed gap where brief keyword mentions (e.g. exact terms buried in larger chunks) are missed by dense-only retrieval.
    - Explain the proposed sparse representation/indexing approach and any schema or collection implications before implementation.
    - Measure retrieval quality and added complexity. Do not add hybrid search merely because it is fashionable, and do not claim it is necessary for every RAG system.
    - Get approval before dependencies, collection/schema changes, bulk indexing, or other environment-affecting work.
@@ -99,7 +111,7 @@ Work through these milestones in order, one at a time. Do not skip ahead or impl
 - Do not add agentic workflows, query rewriting, reranking, new frameworks, or other advanced features unless a measured need and explicit approval justify them.
 - Treat a relevant source appearing somewhere in the context as different from the source ranking highly enough to be useful.
 - Treat the presence of a source in the citation list as different from proof that an answer claim is supported.
-- Do not promise “perfect retrieval.” Define a test set, establish a baseline, set realistic targets, and report measured results.
+- Do not promise "perfect retrieval." Define a test set, establish a baseline, set realistic targets, and report measured results.
   Definition of done for a milestone
   A milestone is complete when:
 - The developer understands the purpose and main flow.

@@ -25,7 +25,7 @@ def test_prompt_contains_system_instruction() -> None:
     results = [_make_result("notes/a.md", ["Section"], "Some content.")]
     prompt = build_rag_prompt("What is this?", results)
     assert "personal knowledge assistant" in prompt
-    assert "ONLY the context" in prompt
+    assert "ONLY the context" in prompt or "primary source of truth" in prompt
     assert "I don't have enough information to answer that." in prompt
 
 
