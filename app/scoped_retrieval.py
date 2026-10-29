@@ -37,14 +37,27 @@ def _explicit_file_references(question: str) -> list[str]:
     ]
 
     pattern = re.compile(
-        r"\b(?:file|note|in|from)\s+(?:(?:the\s+)?(?:file|note)\s+)?"
+        r"\b(?:file|note|in|from|of|about)\s+(?:the\s+)?(?:(?:file|note)\s+)?"
         r"(?P<value>[^`\"'<>?!;\n]+?\.md)(?![\w])",
         re.IGNORECASE,
     )
-    references.extend(
-        match.group("value").strip().rstrip(".,)")
-        for match in pattern.finditer(question)
+    for match in pattern.finditer(question):
+        val = match.group("value").strip().rstrip(".,)")
+        if val.lower().startswith("the "):
+            val = val[4:].strip()
+        references.append(val)
+
+    standalone = re.compile(
+        r"\b(?P<value>[A-Za-z0-9_.\-/\u2000-\u3300\U0001F000-\U0001FAFF]+(?:\s+[A-Za-z0-9_.\-/\u2000-\u3300\U0001F000-\U0001FAFF]+){0,2}\.md)(?![\w])",
+        re.IGNORECASE,
     )
+    for match in standalone.finditer(question):
+        val = match.group("value").strip().rstrip(".,)")
+        for prefix in ("the ", "in ", "from ", "of ", "about ", "does "):
+            if val.lower().startswith(prefix):
+                val = val[len(prefix):].strip()
+        references.append(val)
+
     return list(dict.fromkeys(references))
 
 
@@ -79,14 +92,15 @@ def _explicit_heading_references(question: str) -> list[str]:
     return list(dict.fromkeys(references))
 
 
-def parse_explicit_reference(question: str) -> tuple[str, str] | None:
-    """Return a file and heading only when both are explicitly identified."""
+def parse_explicit_reference(question: str) -> tuple[str, str | None] | None:
+    """Return a file and optional heading when a unique file target is explicitly identified."""
     normalized_question = question.translate(str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"}))
     files = _explicit_file_references(normalized_question)
     headings = _explicit_heading_references(normalized_question)
-    if len(files) != 1 or len(headings) != 1:
+    if len(files) != 1 or len(headings) > 1:
         return None
-    return files[0], headings[0]
+    heading = headings[0] if len(headings) == 1 else None
+    return files[0], heading
 
 
 def _scroll_records(
@@ -166,10 +180,12 @@ def retrieve_heading_scoped_chunks(
     client: QdrantClient,
     collection_name: str,
     file_reference: str,
-    heading_reference: str,
+    heading_reference: str | None = None,
 ) -> list[SearchResult] | None:
     """Resolve one indexed file/heading and return its chunks and descendants.
 
+    When heading_reference is None, all chunks belonging to the resolved file
+    are returned in document order.
     `None` means the target was missing or ambiguous; callers should retain
     ordinary semantic results rather than guessing at a different target.
     """
@@ -194,6 +210,33 @@ def retrieve_heading_scoped_chunks(
         scroll_filter=source_filter,
         with_payload=["source_path", "heading_path", "chunk_index", "content"],
     )
+
+    if heading_reference is None:
+        results = []
+        for record in records:
+            payload = record.payload or {}
+            heading_path = payload.get("heading_path")
+            content = payload.get("content")
+            chunk_index = payload.get("chunk_index")
+            if (
+                not isinstance(heading_path, list)
+                or not isinstance(content, str)
+                or not isinstance(chunk_index, int)
+            ):
+                continue
+            results.append(
+                SearchResult(
+                    chunk=Chunk(
+                        source_path=source_path,
+                        heading_path=heading_path,
+                        chunk_index=chunk_index,
+                        content=content,
+                    ),
+                    score=0.0,
+                )
+            )
+        return sorted(results, key=lambda result: result.chunk.chunk_index) if results else None
+
     heading_label = _normalize_label(heading_reference)
     matching_prefixes: set[tuple[str, ...]] = set()
     for record in records:

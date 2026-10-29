@@ -284,23 +284,11 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
         )
     collection_name = collection_name_for_vault(selection.path)
     history = payload.history[-8:]
-    retrieval_query = "\n".join(
-        [*(f"{message.role}: {message.content}" for message in history), payload.query]
-    )
     context_note = None
     try:
         client = get_qdrant_client()
-        semantic_results = search_chunks(
-            client=client,
-            collection_name=collection_name,
-            query=retrieval_query,
-            top_k=payload.top_k,
-            score_threshold=payload.score_threshold,
-        )
         explicit_reference = parse_explicit_reference(payload.query)
-        if explicit_reference is None:
-            results = semantic_results
-        else:
+        if explicit_reference is not None:
             file_reference, heading_reference = explicit_reference
             scoped_results = retrieve_heading_scoped_chunks(
                 client=client,
@@ -309,12 +297,6 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
                 heading_reference=heading_reference,
             )
             if scoped_results is None:
-                context_note = (
-                    "The explicitly named file and heading could not be resolved uniquely "
-                    "in the index. Do not present other sources as that target; explain "
-                    "that the requested target could not be identified unless the context "
-                    "itself clearly establishes it."
-                )
                 return ChatResponse(
                     answer=EXPLICIT_TARGET_UNRESOLVED_ANSWER,
                     citations=[],
@@ -325,6 +307,17 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
                     "Do not claim the section is complete or infer omitted content."
                 )
             results = scoped_results
+        else:
+            retrieval_query = "\n".join(
+                [*(f"{message.role}: {message.content}" for message in history), payload.query]
+            )
+            results = search_chunks(
+                client=client,
+                collection_name=collection_name,
+                query=retrieval_query,
+                top_k=payload.top_k,
+                score_threshold=payload.score_threshold,
+            )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:

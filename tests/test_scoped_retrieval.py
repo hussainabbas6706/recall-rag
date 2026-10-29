@@ -95,8 +95,13 @@ def test_parse_explicit_reference_accepts_smart_quotes_and_unquoted_filename() -
     assert parse_explicit_reference(question) == ("WEEKLY GOALS.md", "Check off as you go")
 
 
+def test_parse_explicit_reference_supports_whole_file() -> None:
+    assert parse_explicit_reference("What does WEEKLY GOALS.md say?") == ("WEEKLY GOALS.md", None)
+    assert parse_explicit_reference("What is mentioned in the `notes/WEEKLY GOALS.md` file?") == ("notes/WEEKLY GOALS.md", None)
+
+
 def test_parse_explicit_reference_rejects_missing_or_ambiguous_identifiers() -> None:
-    assert parse_explicit_reference("What does WEEKLY GOALS.md say?") is None
+    assert parse_explicit_reference("What do my notes say about routines?") is None
     assert (
         parse_explicit_reference(
             "Compare the 'Check off as you go' section in `WEEKLY GOALS.md` "
@@ -471,3 +476,47 @@ def test_ordinary_chat_keeps_semantic_results(selected_fixture_vault) -> None:
     assert response.json()["citations"][0]["source_path"] == "notes/a.md"
     search.assert_called_once()
     scoped.assert_not_called()
+
+
+def test_scoped_retrieval_returns_all_chunks_for_whole_file() -> None:
+    qdrant = _indexed_collection()
+
+    results = retrieve_heading_scoped_chunks(
+        qdrant,
+        COLLECTION,
+        "WEEKLY GOALS.md",
+        heading_reference=None,
+    )
+
+    assert results is not None
+    assert [(result.chunk.source_path, result.chunk.chunk_index) for result in results] == [
+        ("notes/WEEKLY GOALS.md", 0),
+        ("notes/WEEKLY GOALS.md", 1),
+        ("notes/WEEKLY GOALS.md", 2),
+        ("notes/WEEKLY GOALS.md", 3),
+    ]
+
+
+def test_chat_uses_whole_file_scoped_evidence_and_cites_all_file_chunks(selected_fixture_vault) -> None:
+    qdrant = _indexed_collection()
+    with (
+        patch("app.main.get_qdrant_client", return_value=qdrant),
+        patch("app.main.collection_name_for_vault", return_value=COLLECTION),
+        patch("app.main.search_chunks") as mock_search,
+        patch("app.main.generate_answer", return_value="Goals listed in [1].") as generate,
+    ):
+        response = client.post(
+            "/chat",
+            json={
+                "query": "What is mentioned in the WEEKLY GOALS.md file?",
+                "vault_id": str(selected_fixture_vault.vault_id),
+            },
+        )
+
+    assert response.status_code == 200
+    mock_search.assert_not_called()
+    assert generate.called
+    data = response.json()
+    assert data["answer"] == "Goals listed in [1]."
+    assert len(data["citations"]) == 4
+    assert all(c["source_path"] == "notes/WEEKLY GOALS.md" for c in data["citations"])
