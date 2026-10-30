@@ -1,0 +1,441 @@
+{
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "top_k": 5,
+  "total_queries": 20,
+  "total_chunks_indexed": 13,
+  "overall_recall": 0.95,
+  "overall_precision": 0.323,
+  "overall_mrr": 0.804,
+  "overall_hit_rate": 0.95,
+  "by_category": {
+    "keyword_needle": {
+      "count": 3,
+      "recall": 1.0,
+      "mrr": 0.75
+    },
+    "missing_target": {
+      "count": 1,
+      "recall": 1.0,
+      "mrr": 1.0
+    },
+    "multi_note": {
+      "count": 2,
+      "recall": 1.0,
+      "mrr": 0.667
+    },
+    "natural_language": {
+      "count": 1,
+      "recall": 1.0,
+      "mrr": 1.0
+    },
+    "paraphrased": {
+      "count": 3,
+      "recall": 1.0,
+      "mrr": 0.667
+    },
+    "scoped_heading": {
+      "count": 4,
+      "recall": 0.75,
+      "mrr": 0.75
+    },
+    "scoped_whole_file": {
+      "count": 1,
+      "recall": 1.0,
+      "mrr": 1.0
+    },
+    "semantic_concept": {
+      "count": 3,
+      "recall": 1.0,
+      "mrr": 0.833
+    },
+    "unanswerable": {
+      "count": 2,
+      "recall": 1.0,
+      "mrr": 1.0
+    }
+  },
+  "details": [
+    {
+      "id": "q01_scoped_whole_file",
+      "query": "What is mentioned in the WEEKLY GOALS.md file?",
+      "query_type": "scoped_whole_file",
+      "route_used": "scoped_retrieval",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.25,
+      "mrr": 1.0
+    },
+    {
+      "id": "q02_scoped_heading",
+      "query": "What is in the 'Launch Checklist' section of `WEEKLY GOALS.md`?",
+      "query_type": "scoped_heading",
+      "route_used": "scoped_retrieval",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 1.0,
+      "mrr": 1.0
+    },
+    {
+      "id": "q03_scoped_emoji_file",
+      "query": "List the steps under 'Weekly Rhythm' in `notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md`.",
+      "query_type": "scoped_heading",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/daily-routine.md",
+        "notes/archive/old-plan.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q04_scoped_daily_routine",
+      "query": "What does the 'Morning Review' section in `daily-routine.md` say?",
+      "query_type": "scoped_heading",
+      "route_used": "scoped_retrieval",
+      "expected_sources": [
+        "notes/daily-routine.md"
+      ],
+      "retrieved_sources": [
+        "notes/daily-routine.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 1.0,
+      "mrr": 1.0
+    },
+    {
+      "id": "q05_scoped_architecture",
+      "query": "Check the 'Framework Selection' section in architecture-decisions.md",
+      "query_type": "scoped_heading",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/architecture-decisions.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md",
+        "notes/archive/old-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/daily-routine.md"
+      ],
+      "hit": 0,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "id": "q06_keyword_needle_code_freeze",
+      "query": "When is the code freeze?",
+      "query_type": "keyword_needle",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md",
+        "notes/daily-routine.md",
+        "notes/project-plan.md",
+        "notes/project-plan.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q07_keyword_needle_risk_register",
+      "query": "What is documented in the risk register?",
+      "query_type": "keyword_needle",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/project-plan.md"
+      ],
+      "retrieved_sources": [
+        "notes/archive/old-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/daily-routine.md",
+        "notes/project-plan.md",
+        "notes/project-plan.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.25
+    },
+    {
+      "id": "q08_keyword_needle_loom_demo",
+      "query": "Where do we record the Loom demo?",
+      "query_type": "keyword_needle",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q09_semantic_agent_memory",
+      "query": "How is state persistence and long-term memory handled in the agent?",
+      "query_type": "semantic_concept",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.4,
+      "mrr": 1.0
+    },
+    {
+      "id": "q10_semantic_fastapi_vs_python",
+      "query": "What are the benefits of pure Python scripts versus FastAPI?",
+      "query_type": "semantic_concept",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/architecture-decisions.md"
+      ],
+      "retrieved_sources": [
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q11_semantic_embedding_strategy",
+      "query": "Why are local embeddings used instead of cloud APIs?",
+      "query_type": "semantic_concept",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/project-plan.md"
+      ],
+      "retrieved_sources": [
+        "notes/master-timeline.md",
+        "notes/project-plan.md",
+        "notes/project-plan.md",
+        "notes/architecture-decisions.md",
+        "notes/architecture-decisions.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.5
+    },
+    {
+      "id": "q12_paraphrased_friday_tasks",
+      "query": "Which progress updates and tasks must be summarized before Friday?",
+      "query_type": "paraphrased",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "retrieved_sources": [
+        "notes/daily-routine.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/master-timeline.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.5
+    },
+    {
+      "id": "q13_paraphrased_morning_rituals",
+      "query": "What rituals should I do right before the morning 10 AM standup?",
+      "query_type": "paraphrased",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/daily-routine.md"
+      ],
+      "retrieved_sources": [
+        "notes/daily-routine.md",
+        "notes/daily-routine.md",
+        "notes/master-timeline.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q14_paraphrased_milestones",
+      "query": "What key project checkpoints and milestones are scheduled?",
+      "query_type": "paraphrased",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/master-timeline.md"
+      ],
+      "retrieved_sources": [
+        "notes/archive/old-plan.md",
+        "notes/master-timeline.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/daily-routine.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.5
+    },
+    {
+      "id": "q15_multi_note_release_risks",
+      "query": "What are the main launch milestones and their associated risks?",
+      "query_type": "multi_note",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/master-timeline.md",
+        "notes/project-plan.md"
+      ],
+      "retrieved_sources": [
+        "notes/archive/old-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/master-timeline.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.4,
+      "mrr": 0.3333333333333333
+    },
+    {
+      "id": "q16_multi_note_agent_stack",
+      "query": "Summarize how the ReAct agent is built and its persistent storage architecture.",
+      "query_type": "multi_note",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md"
+      ],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md",
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.4,
+      "mrr": 1.0
+    },
+    {
+      "id": "q17_historical_archive",
+      "query": "What was documented in the old Q1 exploratory plan?",
+      "query_type": "natural_language",
+      "route_used": "semantic_search",
+      "expected_sources": [
+        "notes/archive/old-plan.md"
+      ],
+      "retrieved_sources": [
+        "notes/archive/old-plan.md",
+        "notes/master-timeline.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 1.0
+    },
+    {
+      "id": "q18_unanswerable_ancient_history",
+      "query": "Who was the first emperor of the Roman Empire?",
+      "query_type": "unanswerable",
+      "route_used": "semantic_search",
+      "expected_sources": [],
+      "retrieved_sources": [
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/architecture-decisions.md",
+        "notes/architecture-decisions.md",
+        "notes/archive/old-plan.md",
+        "notes/daily-routine.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.0,
+      "mrr": 1.0
+    },
+    {
+      "id": "q19_unanswerable_server_uptime",
+      "query": "What is the live latency and uptime of our production Redis cluster?",
+      "query_type": "unanswerable",
+      "route_used": "semantic_search",
+      "expected_sources": [],
+      "retrieved_sources": [
+        "notes/architecture-decisions.md",
+        "notes/\ud83d\uddd3\ufe0f WEEKLY GOALS.md",
+        "notes/project-plan.md",
+        "notes/project-plan.md",
+        "notes/daily-routine.md"
+      ],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 0.0,
+      "mrr": 1.0
+    },
+    {
+      "id": "q20_missing_file_scoped",
+      "query": "What does the 'Summary' section in `NONEXISTENT_NOTE.md` say?",
+      "query_type": "missing_target",
+      "route_used": "scoped_unresolved",
+      "expected_sources": [],
+      "retrieved_sources": [],
+      "hit": 1,
+      "recall": 1.0,
+      "precision": 1.0,
+      "mrr": 1.0
+    }
+  ]
+}

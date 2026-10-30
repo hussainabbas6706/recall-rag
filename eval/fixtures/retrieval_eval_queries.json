@@ -1,0 +1,142 @@
+[
+  {
+    "id": "q01_scoped_whole_file",
+    "query": "What is mentioned in the WEEKLY GOALS.md file?",
+    "query_type": "scoped_whole_file",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "WEEKLY GOALS.md", "heading": null}
+  },
+  {
+    "id": "q02_scoped_heading",
+    "query": "What is in the 'Launch Checklist' section of `WEEKLY GOALS.md`?",
+    "query_type": "scoped_heading",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "WEEKLY GOALS.md", "heading": "Launch Checklist"}
+  },
+  {
+    "id": "q03_scoped_emoji_file",
+    "query": "List the steps under 'Weekly Rhythm' in `notes/🗓️ WEEKLY GOALS.md`.",
+    "query_type": "scoped_heading",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": {"file": "notes/🗓️ WEEKLY GOALS.md", "heading": "Weekly Rhythm"}
+  },
+  {
+    "id": "q04_scoped_daily_routine",
+    "query": "What does the 'Morning Review' section in `daily-routine.md` say?",
+    "query_type": "scoped_heading",
+    "expected_sources": ["notes/daily-routine.md"],
+    "expected_target": {"file": "daily-routine.md", "heading": "Morning Review"}
+  },
+  {
+    "id": "q05_scoped_architecture",
+    "query": "Check the 'Framework Selection' section in architecture-decisions.md",
+    "query_type": "scoped_heading",
+    "expected_sources": ["notes/architecture-decisions.md"],
+    "expected_target": {"file": "architecture-decisions.md", "heading": "Framework Selection"}
+  },
+  {
+    "id": "q06_keyword_needle_code_freeze",
+    "query": "When is the code freeze?",
+    "query_type": "keyword_needle",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q07_keyword_needle_risk_register",
+    "query": "What is documented in the risk register?",
+    "query_type": "keyword_needle",
+    "expected_sources": ["notes/project-plan.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q08_keyword_needle_loom_demo",
+    "query": "Where do we record the Loom demo?",
+    "query_type": "keyword_needle",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q09_semantic_agent_memory",
+    "query": "How is state persistence and long-term memory handled in the agent?",
+    "query_type": "semantic_concept",
+    "expected_sources": ["notes/architecture-decisions.md", "notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q10_semantic_fastapi_vs_python",
+    "query": "What are the benefits of pure Python scripts versus FastAPI?",
+    "query_type": "semantic_concept",
+    "expected_sources": ["notes/architecture-decisions.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q11_semantic_embedding_strategy",
+    "query": "Why are local embeddings used instead of cloud APIs?",
+    "query_type": "semantic_concept",
+    "expected_sources": ["notes/project-plan.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q12_paraphrased_friday_tasks",
+    "query": "Which progress updates and tasks must be summarized before Friday?",
+    "query_type": "paraphrased",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q13_paraphrased_morning_rituals",
+    "query": "What rituals should I do right before the morning 10 AM standup?",
+    "query_type": "paraphrased",
+    "expected_sources": ["notes/daily-routine.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q14_paraphrased_milestones",
+    "query": "What key project checkpoints and milestones are scheduled?",
+    "query_type": "paraphrased",
+    "expected_sources": ["notes/master-timeline.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q15_multi_note_release_risks",
+    "query": "What are the main launch milestones and their associated risks?",
+    "query_type": "multi_note",
+    "expected_sources": ["notes/master-timeline.md", "notes/project-plan.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q16_multi_note_agent_stack",
+    "query": "Summarize how the ReAct agent is built and its persistent storage architecture.",
+    "query_type": "multi_note",
+    "expected_sources": ["notes/🗓️ WEEKLY GOALS.md", "notes/architecture-decisions.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q17_historical_archive",
+    "query": "What was documented in the old Q1 exploratory plan?",
+    "query_type": "natural_language",
+    "expected_sources": ["notes/archive/old-plan.md"],
+    "expected_target": null
+  },
+  {
+    "id": "q18_unanswerable_ancient_history",
+    "query": "Who was the first emperor of the Roman Empire?",
+    "query_type": "unanswerable",
+    "expected_sources": [],
+    "expected_target": null
+  },
+  {
+    "id": "q19_unanswerable_server_uptime",
+    "query": "What is the live latency and uptime of our production Redis cluster?",
+    "query_type": "unanswerable",
+    "expected_sources": [],
+    "expected_target": null
+  },
+  {
+    "id": "q20_missing_file_scoped",
+    "query": "What does the 'Summary' section in `NONEXISTENT_NOTE.md` say?",
+    "query_type": "missing_target",
+    "expected_sources": [],
+    "expected_target": null
+  }
+]

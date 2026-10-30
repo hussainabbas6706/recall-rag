@@ -70,13 +70,15 @@ Work through these milestones in order, one at a time. Do not skip ahead or impl
    - Added unit and integration tests covering whole-file scoped retrieval.
    - Fixed Gemini model/retry latency and false citation attribution.
    - All tests passing (118 passed, 2 skipped).
-3. Create a repeatable retrieval evaluation set
-   - Use synthetic Markdown notes, not the real vault, to create approximately 15–30 representative questions with expected source files/chunks.
-   - Cover explicit filename and heading references, natural/implicit references, paraphrased wording, multi-chunk or multi-note questions, ambiguous/missing references, and unanswerable questions.
-   - Include keyword-specific queries (like the observed "code freeze" case) to measure dense-only retrieval gaps.
-   - Measure whether expected evidence appears in the retrieved results (for example Recall@k), ranking quality where practical, and irrelevant-context inclusion.
-   - Establish and record a baseline before changing retrieval strategy.
-   - Keep evaluation deterministic and affordable; do not require Gemini calls for basic retrieval metrics.
+3. ✅ COMPLETE — Create a repeatable retrieval evaluation set
+   - Created synthetic Markdown vault in `eval/fixtures/synthetic_vault.py` covering roadmaps, architecture, timelines, daily routines, and archived plans.
+   - Built 20 curated evaluation test queries in `eval/fixtures/retrieval_eval_queries.json` across 9 categories (scoped whole-file, scoped heading, keyword needle, semantic concept, paraphrased, multi-note, unanswerable, missing target).
+   - Created standalone benchmark runner `eval/run_retrieval_eval.py` measuring Recall@k, MRR (Mean Reciprocal Rank), Precision@k, and category breakdowns.
+   - Established deterministic baseline (`eval/results/baseline_dense.json`):
+     * Overall Recall@5: 95.0%
+     * Overall MRR@5: 0.804
+     * Observed ranking gap: while dense bi-encoder retrieves relevant notes, it often ranks them low (#2 to #4) on keyword needles (MRR 0.750), paraphrased queries (MRR 0.667), and multi-note queries (MRR 0.667).
+   - Added automated benchmark test `tests/test_retrieval_benchmark.py` (119 passed, 2 skipped).
 4. Improve the existing retrieval pipeline — Two-Stage Retrieval with Cross-Encoder Reranking
    - Over-fetch top k=15 candidate chunks from Qdrant using MiniLM bi-encoder vector search.
    - Add a lightweight cross-encoder model (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2, ~80MB, fast on CPU) to rerank candidates by true cross-attention relevance.
