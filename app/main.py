@@ -28,6 +28,7 @@ from app.prompt import (
     build_rag_prompt,
     sort_results_sequentially,
 )
+from app.reranker import rerank_search_results
 from app.scoped_retrieval import (
     MAX_SCOPED_CONTEXT_CHARS,
     parse_explicit_reference,
@@ -254,13 +255,23 @@ def search_vault(payload: SearchRequest, request: Request) -> SearchResponse:
     collection_name = collection_name_for_vault(selection.path)
     try:
         client = get_qdrant_client()
-        results = search_chunks(
+        settings = get_settings()
+        candidates_k = max(payload.top_k, settings.rerank_candidates_k) if settings.enable_reranker else payload.top_k
+        candidates = search_chunks(
             client=client,
             collection_name=collection_name,
             query=payload.query,
-            top_k=payload.top_k,
+            top_k=candidates_k,
             score_threshold=payload.score_threshold,
         )
+        if settings.enable_reranker and candidates:
+            results = rerank_search_results(
+                query=payload.query,
+                results=candidates,
+                top_k=payload.top_k,
+            )
+        else:
+            results = candidates[:payload.top_k]
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:
@@ -311,13 +322,23 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
             retrieval_query = "\n".join(
                 [*(f"{message.role}: {message.content}" for message in history), payload.query]
             )
-            results = search_chunks(
+            settings = get_settings()
+            candidates_k = max(payload.top_k, settings.rerank_candidates_k) if settings.enable_reranker else payload.top_k
+            candidates = search_chunks(
                 client=client,
                 collection_name=collection_name,
                 query=retrieval_query,
-                top_k=payload.top_k,
+                top_k=candidates_k,
                 score_threshold=payload.score_threshold,
             )
+            if settings.enable_reranker and candidates:
+                results = rerank_search_results(
+                    query=payload.query,
+                    results=candidates,
+                    top_k=payload.top_k,
+                )
+            else:
+                results = candidates[:payload.top_k]
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:

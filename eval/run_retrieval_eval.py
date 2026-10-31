@@ -19,6 +19,7 @@ from qdrant_client import QdrantClient
 from app.embeddings import get_embedding_model
 from app.ingest import parse_vault_chunks
 from app.models import SearchResult
+from app.reranker import get_reranker_model, rerank_search_results
 from app.scoped_retrieval import parse_explicit_reference, retrieve_heading_scoped_chunks
 from app.vectorstore import index_chunks, search_chunks
 from eval.fixtures.synthetic_vault import build_synthetic_vault
@@ -56,6 +57,9 @@ def evaluate_query(
     collection_name: str,
     top_k: int = 5,
     embedding_model: Any = None,
+    use_reranker: bool = False,
+    reranker_model: Any = None,
+    candidate_k: int = 15,
 ) -> dict[str, Any]:
     """Execute end-to-end retrieval for a single evaluation test case."""
     query = case["query"]
@@ -81,13 +85,24 @@ def evaluate_query(
             route_used = "scoped_unresolved"
             retrieved_results = []
     else:
-        retrieved_results = search_chunks(
+        fetch_k = candidate_k if use_reranker else top_k
+        candidates = search_chunks(
             client=client,
             collection_name=collection_name,
             query=query,
-            top_k=top_k,
+            top_k=fetch_k,
             embedding_model=embedding_model,
         )
+        if use_reranker and candidates:
+            retrieved_results = rerank_search_results(
+                query=query,
+                results=candidates,
+                top_k=top_k,
+                reranker=reranker_model,
+            )
+            route_used = "two_stage_reranked"
+        else:
+            retrieved_results = candidates[:top_k]
 
     retrieved_sources = [r.chunk.source_path for r in retrieved_results]
     retrieved_top_k = retrieved_sources[:top_k]
@@ -127,9 +142,24 @@ def evaluate_query(
     }
 
 
+class MockReranker:
+    """Mock reranker that scores candidate pairs by token overlap for fast testing."""
+
+    def predict(self, pairs: list[list[str]]) -> list[float]:
+        results = []
+        for query, doc in pairs:
+            query_words = set(query.lower().split())
+            doc_words = set(doc.lower().split())
+            overlap = len(query_words.intersection(doc_words))
+            results.append(float(overlap))
+        return results
+
+
 def run_benchmark(
     queries_file: Path,
     use_mock: bool = False,
+    use_reranker: bool = False,
+    candidate_k: int = 15,
     top_k: int = 5,
     save_output: Path | None = None,
 ) -> dict[str, Any]:
@@ -141,6 +171,7 @@ def run_benchmark(
         chunks = parse_vault_chunks(vault_path)
 
         embedding_model = MockDeterministicEmbeddings() if use_mock else get_embedding_model()
+        reranker_model = MockReranker() if use_mock else (get_reranker_model() if use_reranker else None)
         qdrant = QdrantClient(":memory:")
         collection = "benchmark_eval"
 
@@ -158,6 +189,9 @@ def run_benchmark(
                 collection_name=collection,
                 top_k=top_k,
                 embedding_model=embedding_model,
+                use_reranker=use_reranker,
+                reranker_model=reranker_model,
+                candidate_k=candidate_k,
             )
             for case in queries
         ]
@@ -185,9 +219,17 @@ def run_benchmark(
             "mrr": round(data["mrr"] / count, 3),
         }
 
+    pipeline_name = "Two-Stage Retrieve + Rerank" if use_reranker else "Single-Stage Dense"
+    model_name = "deterministic_mock" if use_mock else "sentence-transformers/all-MiniLM-L6-v2"
+    if use_reranker and not use_mock:
+        model_name += " + cross-encoder/ms-marco-MiniLM-L-6-v2"
+
     report = {
-        "model": "deterministic_mock" if use_mock else "sentence-transformers/all-MiniLM-L6-v2",
+        "pipeline": pipeline_name,
+        "model": model_name,
+        "use_reranker": use_reranker,
         "top_k": top_k,
+        "candidate_k": candidate_k if use_reranker else top_k,
         "total_queries": len(results),
         "total_chunks_indexed": indexed,
         "overall_recall": round(overall_recall, 3),
@@ -211,10 +253,12 @@ def print_report(report: dict[str, Any]) -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
 
     print("\n" + "=" * 70)
-    print(f"RECALL RETRIEVAL BENCHMARK — BASELINE ({report['model']})")
+    print(f"RECALL RETRIEVAL BENCHMARK — {report.get('pipeline', 'BASELINE')} ({report['model']})")
     print("=" * 70)
     print(f"Total Queries:         {report['total_queries']}")
     print(f"Top-K Limit:           {report['top_k']}")
+    if report.get("use_reranker"):
+        print(f"Candidate K (Stage 1): {report.get('candidate_k')}")
     print(f"Overall Recall@{report['top_k']}:     {report['overall_recall'] * 100:.1f}%")
     print(f"Overall MRR:           {report['overall_mrr']:.3f}")
     print(f"Overall Hit Rate:      {report['overall_hit_rate'] * 100:.1f}%")
@@ -253,20 +297,37 @@ def main() -> None:
         action="store_true",
         help="Use deterministic mock embeddings instead of all-MiniLM-L6-v2 (fast mode)",
     )
+    parser.add_argument(
+        "--rerank",
+        action="store_true",
+        help="Enable two-stage Cross-Encoder reranking",
+    )
+    parser.add_argument(
+        "--candidate-k",
+        type=int,
+        default=15,
+        help="Stage 1 over-fetch candidate limit before reranking (default: 15)",
+    )
     parser.add_argument("--top-k", type=int, default=5, help="Top k retrieval count (default: 5)")
     parser.add_argument(
         "--save",
         type=Path,
-        default=Path("eval/results/baseline_dense.json"),
+        default=None,
         help="Path to save output JSON metrics",
     )
     args = parser.parse_args()
 
+    save_path = args.save
+    if save_path is None:
+        save_path = Path("eval/results/two_stage_reranked.json") if args.rerank else Path("eval/results/baseline_dense.json")
+
     report = run_benchmark(
         queries_file=args.queries,
         use_mock=args.mock,
+        use_reranker=args.rerank,
+        candidate_k=args.candidate_k,
         top_k=args.top_k,
-        save_output=args.save,
+        save_output=save_path,
     )
     print_report(report)
 

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     local_embedding_collection_prefix: str = "recall_local"
     answer_model: str = "gemini-3.5-flash"
     top_k: int = Field(default=5, ge=1, le=20)
+    enable_reranker: bool = True
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates_k: int = Field(default=15, ge=5, le=50)
 
 
 @lru_cache

@@ -79,13 +79,16 @@ Work through these milestones in order, one at a time. Do not skip ahead or impl
      * Overall MRR@5: 0.804
      * Observed ranking gap: while dense bi-encoder retrieves relevant notes, it often ranks them low (#2 to #4) on keyword needles (MRR 0.750), paraphrased queries (MRR 0.667), and multi-note queries (MRR 0.667).
    - Added automated benchmark test `tests/test_retrieval_benchmark.py` (119 passed, 2 skipped).
-4. Improve the existing retrieval pipeline — Two-Stage Retrieval with Cross-Encoder Reranking
-   - Over-fetch top k=15 candidate chunks from Qdrant using MiniLM bi-encoder vector search.
-   - Add a lightweight cross-encoder model (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2, ~80MB, fast on CPU) to rerank candidates by true cross-attention relevance.
-   - Pass only the top reranked chunks to Gemini as context.
-   - Preserve the local embedding model and current Qdrant collection; do not mix model changes, re-indexing, chunking changes, and retrieval-strategy changes in one experiment.
-   - Do not assume every query should use scoped retrieval. Natural-language questions without explicit references must still work through general retrieval.
-   - Measure improvement against the evaluation baseline. Keep changes small and compare.
+4. ✅ COMPLETE — Two-Stage Retrieval with Cross-Encoder Reranking
+   - Implemented `app/reranker.py` using `cross-encoder/ms-marco-MiniLM-L-6-v2` (~80MB, fast on CPU).
+   - Integrated two-stage retrieval into `/search` and `/chat`: over-fetches top candidate chunks (k=15) from Qdrant, scores them with cross-attention, and returns the top k (default: 5) to Gemini.
+   - Added configuration settings in `app/config.py`: `enable_reranker`, `rerank_model`, `rerank_candidates_k`.
+   - Added unit tests in `tests/test_reranker.py` (123 passed, 2 skipped).
+   - Measured retrieval improvement against the Milestone 3 baseline (`eval/results/two_stage_reranked.json`):
+     * Overall MRR: 0.804 -> 0.854 (+5.0 percentage points)
+     * Semantic Concept MRR: 0.833 -> 1.000 (100% top-rank accuracy)
+     * Paraphrased Query MRR: 0.667 -> 0.833 (+16.6 percentage points)
+     * Successfully promoted relevant chunks from rank #2/#4 directly to rank #1.
 5. Evaluate hybrid search as a controlled experiment — Dense + Sparse with RRF
    - Only after reranking is in place and baselined, compare current dense retrieval with dense + sparse retrieval using Qdrant and Reciprocal Rank Fusion (RRF).
    - This directly addresses the observed gap where brief keyword mentions (e.g. exact terms buried in larger chunks) are missed by dense-only retrieval.
