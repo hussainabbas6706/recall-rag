@@ -17,6 +17,7 @@ from typing import Any
 from qdrant_client import QdrantClient
 
 from app.embeddings import get_embedding_model
+from app.hybrid import BM25Index, reciprocal_rank_fusion
 from app.ingest import parse_vault_chunks
 from app.models import SearchResult
 from app.reranker import get_reranker_model, rerank_search_results
@@ -60,6 +61,8 @@ def evaluate_query(
     use_reranker: bool = False,
     reranker_model: Any = None,
     candidate_k: int = 15,
+    use_hybrid: bool = False,
+    bm25_index: BM25Index | None = None,
 ) -> dict[str, Any]:
     """Execute end-to-end retrieval for a single evaluation test case."""
     query = case["query"]
@@ -85,14 +88,25 @@ def evaluate_query(
             route_used = "scoped_unresolved"
             retrieved_results = []
     else:
-        fetch_k = candidate_k if use_reranker else top_k
-        candidates = search_chunks(
+        fetch_k = candidate_k if (use_reranker or use_hybrid) else top_k
+        dense_candidates = search_chunks(
             client=client,
             collection_name=collection_name,
             query=query,
             top_k=fetch_k,
             embedding_model=embedding_model,
         )
+        if use_hybrid and bm25_index is not None:
+            sparse_candidates = bm25_index.search(query=query, top_k=fetch_k)
+            candidates = reciprocal_rank_fusion(
+                [dense_candidates, sparse_candidates],
+                k=60,
+                top_k=fetch_k,
+            )
+            route_used = "hybrid_search"
+        else:
+            candidates = dense_candidates
+
         if use_reranker and candidates:
             retrieved_results = rerank_search_results(
                 query=query,
@@ -100,7 +114,7 @@ def evaluate_query(
                 top_k=top_k,
                 reranker=reranker_model,
             )
-            route_used = "two_stage_reranked"
+            route_used = "hybrid_two_stage_reranked" if use_hybrid else "two_stage_reranked"
         else:
             retrieved_results = candidates[:top_k]
 
@@ -159,6 +173,7 @@ def run_benchmark(
     queries_file: Path,
     use_mock: bool = False,
     use_reranker: bool = False,
+    use_hybrid: bool = False,
     candidate_k: int = 15,
     top_k: int = 5,
     save_output: Path | None = None,
@@ -172,6 +187,7 @@ def run_benchmark(
 
         embedding_model = MockDeterministicEmbeddings() if use_mock else get_embedding_model()
         reranker_model = MockReranker() if use_mock else (get_reranker_model() if use_reranker else None)
+        bm25_index = BM25Index(chunks) if use_hybrid else None
         qdrant = QdrantClient(":memory:")
         collection = "benchmark_eval"
 
@@ -192,6 +208,8 @@ def run_benchmark(
                 use_reranker=use_reranker,
                 reranker_model=reranker_model,
                 candidate_k=candidate_k,
+                use_hybrid=use_hybrid,
+                bm25_index=bm25_index,
             )
             for case in queries
         ]
@@ -219,17 +237,27 @@ def run_benchmark(
             "mrr": round(data["mrr"] / count, 3),
         }
 
-    pipeline_name = "Two-Stage Retrieve + Rerank" if use_reranker else "Single-Stage Dense"
+    pipeline_name = "Single-Stage Dense"
+    if use_hybrid and use_reranker:
+        pipeline_name = "Hybrid (Dense + BM25 via RRF) + Cross-Encoder Rerank"
+    elif use_hybrid:
+        pipeline_name = "Hybrid (Dense + BM25 via RRF)"
+    elif use_reranker:
+        pipeline_name = "Two-Stage Retrieve + Rerank"
+
     model_name = "deterministic_mock" if use_mock else "sentence-transformers/all-MiniLM-L6-v2"
+    if use_hybrid:
+        model_name += " + BM25(RRF)"
     if use_reranker and not use_mock:
         model_name += " + cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     report = {
         "pipeline": pipeline_name,
         "model": model_name,
+        "use_hybrid": use_hybrid,
         "use_reranker": use_reranker,
         "top_k": top_k,
-        "candidate_k": candidate_k if use_reranker else top_k,
+        "candidate_k": candidate_k if (use_reranker or use_hybrid) else top_k,
         "total_queries": len(results),
         "total_chunks_indexed": indexed,
         "overall_recall": round(overall_recall, 3),
@@ -303,6 +331,11 @@ def main() -> None:
         help="Enable two-stage Cross-Encoder reranking",
     )
     parser.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="Enable hybrid search (Dense + BM25 via RRF)",
+    )
+    parser.add_argument(
         "--candidate-k",
         type=int,
         default=15,
@@ -319,12 +352,20 @@ def main() -> None:
 
     save_path = args.save
     if save_path is None:
-        save_path = Path("eval/results/two_stage_reranked.json") if args.rerank else Path("eval/results/baseline_dense.json")
+        if args.hybrid and args.rerank:
+            save_path = Path("eval/results/hybrid_reranked.json")
+        elif args.hybrid:
+            save_path = Path("eval/results/hybrid_dense.json")
+        elif args.rerank:
+            save_path = Path("eval/results/two_stage_reranked.json")
+        else:
+            save_path = Path("eval/results/baseline_dense.json")
 
     report = run_benchmark(
         queries_file=args.queries,
         use_mock=args.mock,
         use_reranker=args.rerank,
+        use_hybrid=args.hybrid,
         candidate_k=args.candidate_k,
         top_k=args.top_k,
         save_output=save_path,

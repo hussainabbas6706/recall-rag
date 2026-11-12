@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 
 from app.config import get_settings
 from app.generator import generate_answer
+from app.hybrid import get_bm25_index_for_collection, reciprocal_rank_fusion
 from app.indexing import index_vault_incrementally
 from app.ingest import list_vault_entries
 from app.models import (
@@ -324,13 +325,26 @@ def chat_with_vault(payload: ChatRequest, request: Request) -> ChatResponse:
             )
             settings = get_settings()
             candidates_k = max(payload.top_k, settings.rerank_candidates_k) if settings.enable_reranker else payload.top_k
-            candidates = search_chunks(
+            dense_candidates = search_chunks(
                 client=client,
                 collection_name=collection_name,
                 query=retrieval_query,
                 top_k=candidates_k,
                 score_threshold=payload.score_threshold,
             )
+            candidates = dense_candidates
+            if settings.enable_hybrid_search and dense_candidates:
+                try:
+                    bm25_index = get_bm25_index_for_collection(client, collection_name)
+                    sparse_candidates = bm25_index.search(payload.query, top_k=settings.sparse_top_k)
+                    if sparse_candidates:
+                        candidates = reciprocal_rank_fusion(
+                            [dense_candidates, sparse_candidates],
+                            k=settings.rrf_k,
+                            top_k=candidates_k,
+                        )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning('Sparse retrieval failed: %s; using dense candidates', e)
             if settings.enable_reranker and candidates:
                 results = rerank_search_results(
                     query=payload.query,

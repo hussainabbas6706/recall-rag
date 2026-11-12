@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     enable_reranker: bool = True
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     rerank_candidates_k: int = Field(default=15, ge=5, le=50)
+    enable_hybrid_search: bool = True
+    rrf_k: int = Field(default=60, ge=1, le=100)
+    sparse_top_k: int = Field(default=15, ge=5, le=50)
 
 
 @lru_cache

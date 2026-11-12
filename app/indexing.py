@@ -14,6 +14,7 @@ from qdrant_client.http.exceptions import ApiException
 from app.chunking import chunk_markdown
 from app.config import get_settings
 from app.embeddings import EMBEDDING_DIMENSIONS, embed_texts
+from app.hybrid import invalidate_bm25_cache
 from app.ingest import find_markdown_files
 from app.vectorstore import ensure_collection_exists
 
@@ -264,4 +265,6 @@ def index_vault_incrementally(
         embedding_seconds * 1000,
         qdrant_write_seconds * 1000,
     )
+    if result.files_indexed > 0 or result.files_updated > 0 or result.files_deleted > 0:
+        invalidate_bm25_cache(collection_name)
     return result

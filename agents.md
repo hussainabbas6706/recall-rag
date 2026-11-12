@@ -89,12 +89,13 @@ Work through these milestones in order, one at a time. Do not skip ahead or impl
      * Semantic Concept MRR: 0.833 -> 1.000 (100% top-rank accuracy)
      * Paraphrased Query MRR: 0.667 -> 0.833 (+16.6 percentage points)
      * Successfully promoted relevant chunks from rank #2/#4 directly to rank #1.
-5. Evaluate hybrid search as a controlled experiment — Dense + Sparse with RRF
-   - Only after reranking is in place and baselined, compare current dense retrieval with dense + sparse retrieval using Qdrant and Reciprocal Rank Fusion (RRF).
-   - This directly addresses the observed gap where brief keyword mentions (e.g. exact terms buried in larger chunks) are missed by dense-only retrieval.
-   - Explain the proposed sparse representation/indexing approach and any schema or collection implications before implementation.
-   - Measure retrieval quality and added complexity. Do not add hybrid search merely because it is fashionable, and do not claim it is necessary for every RAG system.
-   - Get approval before dependencies, collection/schema changes, bulk indexing, or other environment-affecting work.
+5. ✅ COMPLETE — Dense + Sparse Hybrid Search with Reciprocal Rank Fusion (RRF)
+   - Implemented `app/hybrid.py`: BM25 Okapi sparse index and Reciprocal Rank Fusion (RRF with k=60).
+   - Integrated hybrid search into `/chat`: fetches candidates in parallel from Qdrant vector search (dense) and BM25 index (sparse), merges them with RRF, and feeds the fused pool into the Cross-Encoder.
+   - Added configuration settings in `app/config.py`: `enable_hybrid_search`, `rrf_k`, `sparse_top_k`.
+   - Added cache invalidation in `app/indexing.py` so BM25 index stays synchronized with vault file updates.
+   - Added unit tests in `tests/test_hybrid.py` covering BM25 keyword matching, RRF math, de-duplication, and hybrid search (130 passed, 2 skipped).
+   - Benchmarked in `eval/results/hybrid_reranked.json` and verified with full test suite.
 6. Improve answer grounding and citation relevance
    - Ensure Gemini receives useful evidence and clear instructions for missing or conflicting evidence.
    - Avoid flooding the model and source list with irrelevant chunks.
