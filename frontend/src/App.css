@@ -15,6 +15,48 @@
   border-bottom: 1px solid var(--line);
 }
 
+.topbar-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.version-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #ebe9e1;
+  color: var(--ink-soft);
+}
+
+.topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pipeline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid rgba(66, 98, 79, 0.15);
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .brand {
   display: inline-flex;
   gap: 10px;
@@ -120,20 +162,43 @@
 }
 
 .chat-turn-user {
-  padding-left: 14px;
-  border-left: 2px solid var(--line);
+  padding: 14px 18px;
+  background: #fbfaf8;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.chat-turn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.grounded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #356d48;
+  background: #edf6f0;
+  border: 1px solid rgba(53, 109, 72, 0.2);
+  padding: 2px 9px;
+  border-radius: 999px;
 }
 
 .chat-question-text {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
 .chat-turn-assistant .eyebrow,
 .chat-turn-user .eyebrow {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .answer-text {
@@ -150,11 +215,13 @@
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .citation-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -164,9 +231,19 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  padding: 8px 12px;
+  background: #fbfaf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.55;
+  transition: all 0.15s ease;
+}
+
+.citation-list li:hover {
+  border-color: #cbd5ce;
+  background: #f7f9f7;
 }
 
 .citation-reference {
@@ -470,11 +547,22 @@
 
 .footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 20px 0 30px;
+  padding: 24px 0 36px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-sep {
+  color: #ccc9be;
 }
 
 .visually-hidden {

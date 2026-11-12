@@ -57,11 +57,18 @@ function ChatTurn({ message }) {
   const isUser = message.role === 'user'
   return (
     <article className={`chat-turn ${isUser ? 'chat-turn-user' : 'chat-turn-assistant'}`}>
-      <p className="eyebrow">{isUser ? 'YOU' : 'RECALL'}</p>
+      <div className="chat-turn-header">
+        <p className="eyebrow">{isUser ? 'YOU' : 'RECALL'}</p>
+        {!isUser && message.citations?.length > 0 && (
+          <span className="grounded-badge">
+            ✓ {message.citations.length} {message.citations.length === 1 ? 'source' : 'sources'} cited
+          </span>
+        )}
+      </div>
       <p className={isUser ? 'chat-question-text' : 'answer-text'}>{message.content}</p>
       {!isUser && (
         <div className="citations">
-          <h3>Sources</h3>
+          <h3>Sources & Evidence</h3>
           {message.citations.length > 0 ? (
             <ol className="citation-list">
               {message.citations.map((citation) => (
@@ -71,7 +78,7 @@ function ChatTurn({ message }) {
                     className="citation-link"
                     href={`#vault-file-${encodeURIComponent(citation.source_path)}`}
                   >
-                    <span>{citation.source_path}</span>
+                    <span className="citation-path">{citation.source_path}</span>
                     <span className="citation-heading">
                       {citation.heading_path.length > 0
                         ? citation.heading_path.join(' › ')
@@ -218,21 +225,31 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Recall home">
-          <span className="brand-mark" aria-hidden="true">R</span>
-          <span>recall</span>
-        </a>
-        <span className="local-label">
-          <span className="local-dot" aria-hidden="true" />
-          Local workspace
-        </span>
+        <div className="topbar-left">
+          <a className="brand" href="/" aria-label="Recall home">
+            <span className="brand-mark" aria-hidden="true">R</span>
+            <span>recall</span>
+          </a>
+          <span className="version-tag">v1.0</span>
+        </div>
+        <div className="topbar-right">
+          <span className="pipeline-badge">
+            <span className="badge-dot" aria-hidden="true" />
+            Hybrid RAG (BM25 + Dense)
+          </span>
+          <span className="local-label">
+            <span className="local-dot" aria-hidden="true" />
+            Local workspace
+          </span>
+        </div>
       </header>
 
       <section className="welcome" aria-labelledby="welcome-title">
-        <p className="eyebrow">YOUR PERSONAL KNOWLEDGE ASSISTANT</p>
+        <p className="eyebrow">YOUR PERSONAL OBSIDIAN ASSISTANT</p>
         <h1 id="welcome-title">Bring your notes back to mind.</h1>
         <p className="welcome-copy">
-          Connect a vault folder, index its notes, and chat with answers grounded in your sources.
+          Connect your local Markdown vault, index notes with Hybrid Search (BM25 + Dense Vectors),
+          and ask questions with cross-encoder reranked, verifiable citations.
         </p>
       </section>
 
@@ -431,7 +448,13 @@ function App() {
       </section>
 
       <footer className="footer">
-        <span>Recall v1.1</span>
+        <div className="footer-left">
+          <span>Recall v1.0 (Local Edition)</span>
+          <span className="footer-sep">·</span>
+          <span>BM25 + Dense Hybrid Search</span>
+          <span className="footer-sep">·</span>
+          <span>Cross-Encoder Reranking</span>
+        </div>
         <span>Private by design · Runs locally</span>
       </footer>
     </main>
